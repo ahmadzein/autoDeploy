@@ -4,6 +4,9 @@
   "description": "Local deployment automation tool",
   "main": "src/index.js",
   "type": "module",
+  "bin": {
+    "autodeploy": "./src/cli/interface.js"
+  },
   "scripts": {
     "start": "node src/index.js",
     "deploy": "node src/cli/interface.js"

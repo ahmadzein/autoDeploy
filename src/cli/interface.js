@@ -56,8 +56,12 @@ program
             {
                 type: 'input',
                 name: 'remotePath',
-                message: 'Remote project path:',
-                validate: input => input.length > 0 || 'Remote path is required'
+                message: 'Remote project path (absolute path on server):',
+                validate: input => {
+                    if (input.length === 0) return 'Remote path is required';
+                    if (input.startsWith('~')) return 'Please use absolute path (e.g., /home/username/project)';
+                    return true;
+                }
             },
             {
                 type: 'input',
@@ -156,7 +160,7 @@ program
             ]);
             if (saveAnyway) {
                 configManager.addProject(project);
-                console.log(chalk.yellow(`\n  Project "${answers.name}" saved with connection issues`));
+                console.log(chalk.yellow(`\nï¿½ Project "${answers.name}" saved with connection issues`));
             }
         }
     });
@@ -211,7 +215,7 @@ program
             project = selectedProject;
         }
 
-        console.log(chalk.blue(`\n=æ Deploying ${project.name}...\n`));
+        console.log(chalk.blue(`\n=ï¿½ Deploying ${project.name}...\n`));
 
         const gitOps = new GitOperations(project.localPath);
         
@@ -237,14 +241,14 @@ program
                 }
             }
         } else {
-            console.log(chalk.yellow('  Local directory is not a git repository, skipping git operations'));
+            console.log(chalk.yellow('ï¿½ Local directory is not a git repository, skipping git operations'));
         }
 
         if (project.deploymentSteps.length > 0) {
             const executor = new PipelineExecutor(project.ssh, project.remotePath);
             const results = await executor.execute(project.deploymentSteps);
             
-            console.log(chalk.blue('\n=Ê Deployment Summary:\n'));
+            console.log(chalk.blue('\n=ï¿½ Deployment Summary:\n'));
             const successful = results.filter(r => r.success).length;
             const failed = results.filter(r => !r.success).length;
             
@@ -258,7 +262,7 @@ program
                 console.log(chalk.red('\nL Deployment completed with errors'));
             }
         } else {
-            console.log(chalk.yellow('\n  No deployment steps configured'));
+            console.log(chalk.yellow('\nï¿½ No deployment steps configured'));
         }
     });
 
