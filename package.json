@@ -1,0 +1,23 @@
+{
+  "name": "autodeploy",
+  "version": "1.0.0",
+  "description": "Local deployment automation tool",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/cli/interface.js"
+  },
+  "keywords": ["deployment", "automation", "ssh", "git"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "simple-git": "^3.22.0",
+    "ssh2": "^1.15.0",
+    "commander": "^11.1.0",
+    "inquirer": "^9.2.12",
+    "chalk": "^5.3.0",
+    "crypto-js": "^4.2.0",
+    "ora": "^8.0.1"
+  }
+}
