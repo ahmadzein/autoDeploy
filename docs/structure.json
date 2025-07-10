@@ -1,0 +1,160 @@
+{
+  "title": "AutoDeploy Documentation",
+  "version": "1.0.0",
+  "sections": [
+    {
+      "title": "Getting Started",
+      "icon": "rocket",
+      "path": "getting-started",
+      "items": [
+        {
+          "title": "Installation Guide",
+          "path": "installation.md",
+          "description": "System requirements and installation methods"
+        },
+        {
+          "title": "Quick Start Tutorial",
+          "path": "quick-start.md",
+          "description": "Deploy your first project in 5 minutes"
+        },
+        {
+          "title": "Basic Concepts",
+          "path": "concepts.md",
+          "description": "Understanding AutoDeploy fundamentals"
+        }
+      ]
+    },
+    {
+      "title": "CLI Documentation",
+      "icon": "terminal",
+      "path": "cli",
+      "items": [
+        {
+          "title": "Commands Reference",
+          "path": "commands.md",
+          "description": "Complete CLI command reference"
+        },
+        {
+          "title": "Configuration",
+          "path": "configuration.md",
+          "description": "CLI configuration options"
+        },
+        {
+          "title": "Examples",
+          "path": "examples.md",
+          "description": "Real-world CLI examples"
+        }
+      ]
+    },
+    {
+      "title": "GUI Documentation",
+      "icon": "desktop",
+      "path": "gui",
+      "items": [
+        {
+          "title": "GUI Overview",
+          "path": "overview.md",
+          "description": "Introduction to the GUI interface"
+        },
+        {
+          "title": "Features",
+          "path": "features.md",
+          "description": "Detailed GUI features"
+        },
+        {
+          "title": "Shortcuts",
+          "path": "shortcuts.md",
+          "description": "Keyboard shortcuts reference"
+        }
+      ]
+    },
+    {
+      "title": "Deployment",
+      "icon": "cloud",
+      "path": "deployment",
+      "items": [
+        {
+          "title": "Deployment Strategies",
+          "path": "strategies.md",
+          "description": "Different deployment approaches"
+        },
+        {
+          "title": "Pipeline Configuration",
+          "path": "pipeline.md",
+          "description": "Advanced pipeline setup"
+        },
+        {
+          "title": "Best Practices",
+          "path": "best-practices.md",
+          "description": "Deployment best practices"
+        }
+      ]
+    },
+    {
+      "title": "Security",
+      "icon": "shield",
+      "path": "security",
+      "items": [
+        {
+          "title": "Security Overview",
+          "path": "overview.md",
+          "description": "Security features and practices"
+        },
+        {
+          "title": "Encryption",
+          "path": "encryption.md",
+          "description": "How AutoDeploy encrypts data"
+        },
+        {
+          "title": "SSH Keys",
+          "path": "ssh-keys.md",
+          "description": "Using SSH keys instead of passwords"
+        }
+      ]
+    },
+    {
+      "title": "API Reference",
+      "icon": "code",
+      "path": "api",
+      "items": [
+        {
+          "title": "Core API",
+          "path": "core.md",
+          "description": "Core functionality APIs"
+        },
+        {
+          "title": "Configuration API",
+          "path": "configuration.md",
+          "description": "Configuration management APIs"
+        },
+        {
+          "title": "Extensions",
+          "path": "extensions.md",
+          "description": "Extension development guide"
+        }
+      ]
+    },
+    {
+      "title": "Troubleshooting",
+      "icon": "bug",
+      "path": "troubleshooting",
+      "items": [
+        {
+          "title": "Common Issues",
+          "path": "common-issues.md",
+          "description": "Solutions to common problems"
+        },
+        {
+          "title": "Error Messages",
+          "path": "errors.md",
+          "description": "Error message reference"
+        },
+        {
+          "title": "FAQ",
+          "path": "faq.md",
+          "description": "Frequently asked questions"
+        }
+      ]
+    }
+  ]
+}

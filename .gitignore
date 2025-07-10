@@ -6,3 +6,9 @@ config/
 dist/
 .vscode/
 .idea/
+pnpm-lock.yaml
+gui/dist/
+gui/node_modules/
+*.app
+*.dmg
+*.exe

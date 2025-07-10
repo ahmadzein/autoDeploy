@@ -1,7 +1,7 @@
 {
-  "name": "autodeploy",
+  "name": "autodeploy-cli",
   "version": "1.0.0",
-  "description": "Local deployment automation tool",
+  "description": "Local deployment automation tool - CLI",
   "main": "src/index.js",
   "type": "module",
   "bin": {
@@ -9,9 +9,12 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "deploy": "node src/cli/interface.js"
+    "deploy": "node src/cli/interface.js",
+    "gui": "pnpm --filter autodeploy-gui start",
+    "build:gui": "pnpm --filter autodeploy-gui build",
+    "electron": "pnpm --filter autodeploy-gui electron"
   },
-  "keywords": ["deployment", "automation", "ssh", "git"],
+  "keywords": ["deployment", "automation", "ssh", "git", "cli"],
   "author": "",
   "license": "MIT",
   "dependencies": {
