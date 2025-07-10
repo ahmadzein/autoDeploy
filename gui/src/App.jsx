@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import ProjectList from './components/ProjectList';
 import AddProject from './components/AddProject';
 import DeploymentView from './components/DeploymentView';
+import Documentation from './components/Documentation';
 
 function App() {
   const [projects, setProjects] = useState([]);
@@ -35,6 +36,8 @@ function App() {
           <Route path="/projects" element={<ProjectList projects={projects} onRefresh={loadProjects} />} />
           <Route path="/add-project" element={<AddProject onSuccess={loadProjects} />} />
           <Route path="/deploy/:projectName" element={<DeploymentView projects={projects} />} />
+          <Route path="/docs" element={<Documentation />} />
+          <Route path="/docs/:section/:page" element={<Documentation />} />
         </Routes>
       </Layout>
     </>
