@@ -18,7 +18,7 @@ const configManager = new ConfigManager();
 program
     .name('autodeploy')
     .description('Local deployment automation tool')
-    .version('1.0.0');
+    .version('1.1.0');
 
 program
     .command('add-project')

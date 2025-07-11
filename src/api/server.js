@@ -22,7 +22,7 @@ export function createAPIServer(port = 3000) {
 
     // Health check
     app.get('/api/health', (req, res) => {
-        res.json({ status: 'ok', version: '1.0.0' });
+        res.json({ status: 'ok', version: '1.1.0' });
     });
 
     // Get all projects
