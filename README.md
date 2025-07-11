@@ -2,16 +2,26 @@
 
 A secure local deployment automation tool that helps you deploy projects to remote servers with one click. Available as both CLI and GUI applications.
 
+## Documentation
+
+- [GUI Documentation](GUI_DOCUMENTATION.md) - Comprehensive guide for the web interface
+- [API Documentation](API_DOCUMENTATION.md) - REST API reference
+- [CLI Reference](#cli-usage) - Command line interface guide
+
 ## Features
 
 - 🔐 Encrypted storage of SSH credentials and project configurations
 - 🚀 One-click deployment with automated git commit/push
-- 📦 Customizable deployment pipelines with multiple steps
-- 🎯 Support for multiple projects
+- 📦 Customizable deployment pipelines with local and remote steps
+- 🎯 Support for multiple projects with directory-based configuration
 - 🔄 Automatic git operations (commit, push) before deployment
-- 🖥️ Interactive CLI with beautiful output
-- 🎨 Modern GUI built with Electron and React
-- 📊 Real-time deployment logs and progress tracking
+- ⏱️ Deployment timing tracking for each step and total duration
+- 🖥️ Interactive CLI with beautiful output and full feature parity
+- 🎨 Modern GUI with React and real-time deployment logs
+- 📊 Deployment history and statistics tracking
+- 📝 JSON editor mode for direct configuration editing
+- 🔧 Graceful handling of "nothing to commit" scenarios
+- 🌐 Integrated documentation viewer in GUI
 
 ## Installation
 
@@ -79,11 +89,21 @@ This will:
 2. Connect to the remote server via SSH
 3. Execute all configured deployment steps
 
-### Edit Deployment Steps
+### Edit Project Configuration
 
 ```bash
+# Interactive edit mode
 autodeploy edit my-project
+
+# Edit configuration in JSON mode
+autodeploy edit my-project --json
 ```
+
+This allows you to:
+- Modify project settings and SSH credentials
+- Add, remove, or reorder local steps (run on your machine)
+- Add, remove, or reorder remote steps (run on server)
+- Edit steps directly or in JSON format
 
 ### Remove a Project
 
@@ -91,20 +111,79 @@ autodeploy edit my-project
 autodeploy remove my-project
 ```
 
+### View Deployment History
+
+```bash
+# View history for a specific project
+autodeploy history my-project
+
+# Limit number of deployments shown
+autodeploy history my-project --limit 20
+
+# Show detailed output for all steps
+autodeploy history my-project --verbose
+```
+
+Shows:
+- Deployment timestamp and status
+- Total duration and individual step timings
+- Error details for failed deployments
+- Stopped deployments are tracked separately
+
+### View Deployment Statistics
+
+```bash
+# View global deployment statistics
+autodeploy stats
+```
+
+This shows:
+- Total projects and deployments
+- Today's deployment count
+- Last deployment details
+- Active project count
+
 ## GUI Features
 
 The GUI application provides:
-- Visual project management
-- Real-time deployment logs
-- SSH connection testing
-- Drag-and-drop deployment step configuration
-- Dashboard with deployment statistics
+- Visual project management with grid layout
+- Real-time deployment logs with color-coded terminal output
+- SSH connection testing before saving projects
+- Separate local and remote deployment step configuration
+- JSON editor mode with real-time validation
+- Dashboard with deployment statistics and metrics
+- Deployment history tracking with timing information
+- Integrated documentation viewer with 9 sections
+- Professional interface with improved text contrast
+- Responsive design for all screen sizes
+
+### Starting the GUI
+
+```bash
+# Start in development mode
+autodeploy gui
+
+# Custom ports
+autodeploy gui --port 8080 --api-port 3001
+
+# Production mode
+autodeploy gui --production
+```
 
 ## Security
 
-- All project configurations are stored encrypted in `~/.autodeploy/`
-- SSH passwords are encrypted using AES encryption
-- Config files have restricted permissions (600)
+### Security Features
+
+- All project configurations are stored encrypted in `~/.autodeploy/projects/`
+- Each project has its own directory with separate encrypted files:
+  - `config.json` - Project settings and SSH credentials
+  - `local-steps.json` - Steps that run on your local machine
+  - `remote-steps.json` - Steps that run on the deployment server
+  - `history.json` - Deployment history (last 50 deployments)
+  - `stats.json` - Deployment statistics
+- SSH passwords are encrypted using AES-256-GCM encryption
+- All config files have restricted permissions (600)
+- Encryption keys are derived from your machine's hardware identifiers
 
 ## Environment Variables
 
@@ -112,14 +191,25 @@ The GUI application provides:
 
 ## Example Deployment Steps
 
-Common deployment steps you might configure:
+### Local Steps (run on your machine)
+```
+1. Build application: npm run build
+2. Run tests: npm test
+3. Compress assets: npm run compress
+```
 
+### Remote Steps (run on server)
 ```
 1. Pull latest changes: git pull origin main
-2. Install dependencies: npm install
-3. Build project: npm run build
+2. Install dependencies: npm ci --production
+3. Run migrations: npm run migrate
 4. Restart service: pm2 restart app
 ```
+
+Each step can be configured with:
+- Custom working directory
+- Continue on error flag
+- Individual timing tracking
 
 ## Project Structure
 
@@ -127,18 +217,34 @@ Common deployment steps you might configure:
 autoDeploy/
 ├── src/                    # CLI source code
 │   ├── cli/interface.js    # CLI commands
-│   ├── config/manager.js   # Configuration management
+│   ├── config/
+│   │   ├── manager.js      # Configuration management (re-exports V2)
+│   │   ├── manager-v2.js   # New directory-based config manager
+│   │   └── migrate.js      # Migration script
 │   ├── git/operations.js   # Git operations
 │   ├── ssh/connection.js   # SSH connection handling
 │   ├── pipeline/executor.js # Pipeline execution
 │   └── utils/encryption.js # Encryption utilities
 ├── gui/                    # GUI application
 │   ├── src/               # React components
-│   ├── electron/          # Electron main process
 │   └── public/            # Static assets
-├── homebrew/              # Homebrew formulas
 ├── package.json
 └── README.md
+```
+
+### Configuration Structure
+
+```
+~/.autodeploy/
+├── projects/
+│   ├── project-name/
+│   │   ├── config.json      # Project settings & SSH credentials
+│   │   ├── local-steps.json # Local deployment steps
+│   │   ├── remote-steps.json # Remote deployment steps
+│   │   ├── history.json     # Deployment history
+│   │   └── stats.json       # Deployment statistics
+│   └── another-project/
+└── projects.json.backup     # Backup of old format (if migrated)
 ```
 
 ## Building

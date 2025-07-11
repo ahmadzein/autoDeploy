@@ -12,7 +12,7 @@ export class PipelineExecutor {
         const connection = new SSHConnection(this.sshConfig);
         const results = [];
         
-        console.log(chalk.blue('\n=€ Starting deployment pipeline...\n'));
+        console.log(chalk.blue('\n=ï¿½ Starting deployment pipeline...\n'));
         
         try {
             await connection.connect();
@@ -24,10 +24,16 @@ export class PipelineExecutor {
                 try {
                     let command = step.command;
                     
+                    // Escape single quotes in command
+                    const escapedCommand = step.command.replace(/'/g, "'\\''");
+                    
+                    // Source .bashrc and .profile explicitly, then run command
+                    const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
+                    
                     if (!step.workingDir || step.workingDir === '.') {
-                        command = `cd ${this.projectPath} && ${command}`;
+                        command = `bash -c '${sourceFiles} cd ${this.projectPath} && ${escapedCommand}'`;
                     } else {
-                        command = `cd ${this.projectPath}/${step.workingDir} && ${command}`;
+                        command = `bash -c '${sourceFiles} cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
                     }
                     
                     const result = await connection.exec(command);
@@ -95,5 +101,44 @@ export class PipelineExecutor {
         }
         
         return true;
+    }
+
+    async executeStep(step) {
+        const connection = new SSHConnection(this.sshConfig);
+        
+        try {
+            await connection.connect();
+            
+            let command = step.command;
+            
+            // Escape single quotes in command
+            const escapedCommand = step.command.replace(/'/g, "'\\''");
+            
+            // Source .bashrc and .profile explicitly, then run command
+            const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
+            
+            if (!step.workingDir || step.workingDir === '.') {
+                command = `bash -c '${sourceFiles} cd ${this.projectPath} && ${escapedCommand}'`;
+            } else {
+                command = `bash -c '${sourceFiles} cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
+            }
+            
+            const result = await connection.exec(command);
+            connection.disconnect();
+            
+            return {
+                success: result.code === 0,
+                output: result.stdout,
+                error: result.stderr,
+                step: step.name
+            };
+        } catch (error) {
+            connection.disconnect();
+            return {
+                success: false,
+                error: error.message,
+                step: step.name
+            };
+        }
     }
 }

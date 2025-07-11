@@ -6,4 +6,41 @@
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100;
   }
+  
+  /* Improve input contrast */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  textarea,
+  select {
+    @apply text-gray-900 placeholder-gray-500;
+  }
+  
+  /* Ensure proper contrast for form labels */
+  label {
+    @apply text-gray-700 font-medium;
+  }
+}
+
+@layer components {
+  /* High contrast input styles */
+  .form-input {
+    @apply w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400;
+  }
+  
+  /* High contrast text */
+  .text-high-contrast {
+    @apply text-gray-900;
+  }
+  
+  /* Medium contrast for secondary text */
+  .text-medium-contrast {
+    @apply text-gray-700;
+  }
+  
+  /* Light contrast for tertiary text */
+  .text-light-contrast {
+    @apply text-gray-600;
+  }
 }

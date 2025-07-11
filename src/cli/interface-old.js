@@ -203,7 +203,7 @@ program
         if (testResult.success) {
             spinner.succeed('SSH connection successful');
             configManager.addProject(project);
-            console.log(chalk.green(`\n✓ Project "${answers.name}" added successfully!`));
+            console.log(chalk.green(`\n Project "${answers.name}" added successfully!`));
         } else {
             spinner.fail('SSH connection failed');
             console.error(chalk.red(`\nError: ${testResult.message}`));
@@ -217,7 +217,7 @@ program
             ]);
             if (saveAnyway) {
                 configManager.addProject(project);
-                console.log(chalk.yellow(`\n⚠ Project "${answers.name}" saved with connection issues`));
+                console.log(chalk.yellow(`\n� Project "${answers.name}" saved with connection issues`));
             }
         }
     });
@@ -273,7 +273,7 @@ program
             project = selectedProject;
         }
 
-        console.log(chalk.blue(`\n🚀 Deploying ${project.name}...\n`));
+        console.log(chalk.blue(`\n=� Deploying ${project.name}...\n`));
 
         // Track deployment start
         const startTime = Date.now();
@@ -363,7 +363,7 @@ program
                 }
             }
         } else {
-            console.log(chalk.yellow('⚠ Local directory is not a git repository, skipping git operations'));
+            console.log(chalk.yellow('� Local directory is not a git repository, skipping git operations'));
         }
 
         if (project.deploymentSteps.length > 0) {
@@ -381,7 +381,7 @@ program
                 });
             });
             
-            console.log(chalk.blue('\n📊 Deployment Summary:\n'));
+            console.log(chalk.blue('\n=� Deployment Summary:\n'));
             const successful = results.filter(r => r.success).length;
             const failed = results.filter(r => !r.success).length;
             
@@ -390,13 +390,13 @@ program
             console.log(`Failed: ${chalk.red(failed)}`);
             
             if (failed === 0) {
-                console.log(chalk.green('\n✓ Deployment completed successfully!'));
+                console.log(chalk.green('\n Deployment completed successfully!'));
             } else {
                 deploymentSuccess = false;
-                console.log(chalk.red('\n✗ Deployment completed with errors'));
+                console.log(chalk.red('\nL Deployment completed with errors'));
             }
         } else {
-            console.log(chalk.yellow('\n⚠ No deployment steps configured'));
+            console.log(chalk.yellow('\n� No deployment steps configured'));
         }
         
         // Record deployment
@@ -428,7 +428,7 @@ program
 
         if (confirm) {
             configManager.removeProject(projectName);
-            console.log(chalk.green(`✓ Project "${projectName}" removed`));
+            console.log(chalk.green(` Project "${projectName}" removed`));
         }
     });
 
@@ -436,7 +436,6 @@ program
     .command('history <project-name>')
     .description('View deployment history for a project')
     .option('-l, --limit <number>', 'Number of deployments to show', '10')
-    .option('-v, --verbose', 'Show detailed output for all steps')
     .action((projectName, options) => {
         const project = configManager.getProject(projectName);
         if (!project) {
@@ -458,29 +457,19 @@ program
             const duration = deployment.duration ? `${(deployment.duration / 1000).toFixed(1)}s` : 'N/A';
             
             console.log(`${index + 1}. ${chalk.bold(date.toLocaleString())}`);
-            console.log(`   Status: ${deployment.success ? chalk.green('✓ Success') : deployment.stopped ? chalk.yellow('⚠ Stopped') : chalk.red('✗ Failed')}`);
+            console.log(`   Status: ${deployment.success ? chalk.green('✓ Success') : chalk.red('✗ Failed')}`);
             console.log(`   Duration: ${duration}`);
             
             if (deployment.steps && deployment.steps.length > 0) {
                 console.log(`   Steps:`);
                 deployment.steps.forEach(step => {
                     const stepIcon = step.success ? chalk.green('✓') : chalk.red('✗');
-                    const stepDuration = step.duration ? ` (${(step.duration / 1000).toFixed(1)}s)` : '';
-                    console.log(`     ${stepIcon} ${step.name}${chalk.gray(stepDuration)}`);
-                    
-                    // Show step output/error details
-                    if (step.output && (!step.success || options.verbose)) {
-                        const outputLines = step.output.split('\n').filter(line => line.trim());
-                        outputLines.forEach(line => {
-                            const prefix = step.success ? chalk.gray('→') : chalk.red('→');
-                            console.log(`       ${prefix} ${line.trim()}`);
-                        });
-                    }
+                    console.log(`     ${stepIcon} ${step.name}`);
                 });
             }
             
             if (deployment.error) {
-                console.log(`   ${chalk.red('Error:')} ${chalk.red(deployment.error)}`);
+                console.log(`   Error: ${chalk.red(deployment.error)}`);
             }
             
             console.log();
@@ -535,6 +524,126 @@ program
     .option('-j, --json', 'Edit raw JSON configuration')
     .action(async (projectName, options) => {
         await handleEditCommand(projectName, options, { chalk, inquirer, configManager, program });
+        if (!project) {
+            console.error(chalk.red(`Project "${projectName}" not found`));
+            return;
+        }
+
+        // JSON edit mode
+        if (options.json) {
+            console.log(chalk.blue('\nCurrent project configuration:'));
+            console.log(JSON.stringify(project, null, 2));
+            
+            const { editJson } = await inquirer.prompt([
+                {
+                    type: 'editor',
+                    name: 'editJson',
+                    message: 'Edit the JSON configuration (save and close when done):',
+                    default: JSON.stringify(project, null, 2)
+                }
+            ]);
+            
+            try {
+                const updatedProject = JSON.parse(editJson);
+                configManager.updateProject(projectName, updatedProject);
+                console.log(chalk.green('✓ Project configuration updated successfully'));
+            } catch (error) {
+                console.error(chalk.red('Invalid JSON:', error.message));
+            }
+            return;
+        }
+
+        // Regular edit mode
+        console.log(chalk.blue(`\nCurrent configuration for ${projectName}:`));
+        console.log(chalk.gray('\nLocal Steps:'));
+        if (!project.localSteps || project.localSteps.length === 0) {
+            console.log(chalk.yellow('  No local steps configured'));
+        } else {
+            project.localSteps.forEach((step, index) => {
+                console.log(`  ${index + 1}. ${step.name}: ${step.command}`);
+            });
+        }
+        
+        console.log(chalk.gray('\nRemote Steps:'));
+        if (project.deploymentSteps.length === 0) {
+            console.log(chalk.yellow('  No remote steps configured'));
+        } else {
+            project.deploymentSteps.forEach((step, index) => {
+                console.log(`  ${index + 1}. ${step.name}: ${step.command}`);
+            });
+        }
+
+        const { action } = await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'action',
+                message: 'What would you like to do?',
+                choices: [
+                    { name: 'Edit local steps', value: 'local' },
+                    { name: 'Edit remote steps', value: 'remote' },
+                    { name: 'Edit as JSON', value: 'json' },
+                    { name: 'Cancel', value: 'cancel' }
+                ]
+            }
+        ]);
+
+        if (action === 'cancel') {
+            return;
+        }
+
+        if (action === 'clear') {
+            project.deploymentSteps = [];
+            configManager.updateProject(projectName, { deploymentSteps: [] });
+            console.log(chalk.green(' Steps cleared'));
+            return;
+        }
+
+        const steps = [...project.deploymentSteps];
+        let addMore = true;
+        
+        while (addMore) {
+            const step = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'name',
+                    message: 'Step name:',
+                    validate: input => input.length > 0 || 'Step name is required'
+                },
+                {
+                    type: 'input',
+                    name: 'command',
+                    message: 'Command to run:',
+                    validate: input => input.length > 0 || 'Command is required'
+                },
+                {
+                    type: 'input',
+                    name: 'workingDir',
+                    message: 'Working directory (relative to project, default: .):',
+                    default: '.'
+                },
+                {
+                    type: 'confirm',
+                    name: 'continueOnError',
+                    message: 'Continue on error?',
+                    default: false
+                }
+            ]);
+
+            steps.push(step);
+
+            const { more } = await inquirer.prompt([
+                {
+                    type: 'confirm',
+                    name: 'more',
+                    message: 'Add another step?',
+                    default: false
+                }
+            ]);
+            addMore = more;
+        }
+
+        configManager.updateProject(projectName, { deploymentSteps: steps });
+        console.log(chalk.green(` Steps updated for "${projectName}"`));
     });
 
 program

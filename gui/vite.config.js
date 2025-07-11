@@ -16,6 +16,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: `http://localhost:${process.env.VITE_API_PORT || '3000'}`,
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 });

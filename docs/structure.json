@@ -65,6 +65,11 @@
           "title": "Shortcuts",
           "path": "shortcuts.md",
           "description": "Keyboard shortcuts reference"
+        },
+        {
+          "title": "Running as a Service",
+          "path": "service.md",
+          "description": "Run GUI on a fixed port as a service"
         }
       ]
     },

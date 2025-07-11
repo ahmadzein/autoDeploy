@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Book, Terminal, Globe, Shield, Zap, Settings, AlertCircle, Code } from 'lucide-react';
+import React from 'react';
+import { useParams } from 'react-router-dom';
+import { Book, Terminal, Globe, Shield, Zap, Settings, AlertCircle, Code, Command } from 'lucide-react';
 
-function Documentation() {
-  const [activeSection, setActiveSection] = useState('getting-started');
+function DocumentationPage() {
+  const { section } = useParams();
 
   const sections = {
     'getting-started': {
@@ -44,7 +45,7 @@ function Documentation() {
           
           <h4 className="text-lg font-bold mt-6 mb-3 text-gray-900">Project Fields</h4>
           <div className="bg-gray-100 p-4 rounded-lg mb-4">
-            <dl className="space-y-2">
+            <dl className="space-y-3">
               <div>
                 <dt className="font-semibold text-gray-900">Project Name</dt>
                 <dd className="text-gray-800">Unique identifier for your project</dd>
@@ -106,8 +107,8 @@ function Documentation() {
           </ul>
 
           <h4 className="text-lg font-bold mt-6 mb-3 text-gray-900">Step Configuration</h4>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <dl className="space-y-2">
+          <div className="bg-gray-100 p-4 rounded-lg">
+            <dl className="space-y-3">
               <div>
                 <dt className="font-semibold text-gray-900">Name</dt>
                 <dd className="text-gray-800">Descriptive name for the step</dd>
@@ -195,7 +196,7 @@ function Documentation() {
 
           <div className="bg-red-100 border border-red-300 rounded-lg p-4 mt-4">
             <p className="text-red-900">
-              <strong>Warning:</strong> Never commit your <code>~/.autodeploy/</code> directory to version control.
+              <strong>Warning:</strong> Never commit your <code className="bg-gray-800 text-gray-100 px-2 py-1 rounded font-mono text-sm">~/.autodeploy/</code> directory to version control.
             </p>
           </div>
         </div>
@@ -271,6 +272,98 @@ autodeploy gui --port 8081 --api-port 3001
         </div>
       )
     },
+    'cli': {
+      title: 'CLI Reference',
+      icon: Command,
+      content: (
+        <div className="prose max-w-none">
+          <h3 className="text-2xl font-bold mb-4 text-gray-900">Command Line Interface</h3>
+          
+          <h4 className="text-lg font-bold mt-6 mb-3 text-gray-900">Installation</h4>
+          <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
+# Install globally
+npm install -g autodeploy-cli
+
+# Or run directly with npx
+npx autodeploy-cli
+          </pre>
+
+          <h4 className="text-lg font-bold mt-6 mb-3 text-gray-900">Commands</h4>
+          
+          <div className="space-y-4">
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy list</p>
+              <p className="text-gray-800 mt-1">List all configured projects with their details</p>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy add-project</p>
+              <p className="text-gray-800 mt-1">Add a new project interactively</p>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy edit &lt;project-name&gt;</p>
+              <p className="text-gray-800 mt-1">Edit project configuration and steps</p>
+              <p className="text-gray-700 text-sm mt-2">Options:</p>
+              <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                <li><code>--json</code> - Edit in JSON mode</li>
+              </ul>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy deploy &lt;project-name&gt;</p>
+              <p className="text-gray-800 mt-1">Deploy a project</p>
+              <p className="text-gray-700 text-sm mt-2">Options:</p>
+              <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                <li><code>--skip-git</code> - Skip git operations</li>
+              </ul>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy delete &lt;project-name&gt;</p>
+              <p className="text-gray-800 mt-1">Delete a project configuration</p>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy history &lt;project-name&gt;</p>
+              <p className="text-gray-800 mt-1">View deployment history</p>
+              <p className="text-gray-700 text-sm mt-2">Options:</p>
+              <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                <li><code>--limit &lt;n&gt;</code> - Number of entries to show (default: 10)</li>
+                <li><code>--verbose</code> - Show detailed output for all steps</li>
+              </ul>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy stats</p>
+              <p className="text-gray-800 mt-1">View global deployment statistics</p>
+            </div>
+            
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="font-mono text-sm font-bold text-gray-900">autodeploy gui</p>
+              <p className="text-gray-800 mt-1">Start the web GUI</p>
+              <p className="text-gray-700 text-sm mt-2">Options:</p>
+              <ul className="list-disc list-inside text-sm text-gray-700 ml-2">
+                <li><code>--port &lt;port&gt;</code> - GUI port (default: 8080)</li>
+                <li><code>--api-port &lt;port&gt;</code> - API port (default: 3000)</li>
+                <li><code>--no-browser</code> - Don't open browser automatically</li>
+              </ul>
+            </div>
+          </div>
+
+          <h4 className="text-lg font-bold mt-6 mb-3 text-gray-900">Configuration</h4>
+          <p className="text-gray-800 mb-4">
+            All configurations are stored encrypted in <code className="bg-gray-800 text-gray-100 px-2 py-1 rounded font-mono text-sm">~/.autodeploy/projects/</code>
+          </p>
+          
+          <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
+            <p className="text-blue-900">
+              <strong>Tip:</strong> Use <code className="bg-blue-900 text-blue-100 px-2 py-1 rounded font-mono text-sm">autodeploy edit &lt;project&gt; --json</code> to directly edit configuration files.
+            </p>
+          </div>
+        </div>
+      )
+    },
     'examples': {
       title: 'Examples',
       icon: Code,
@@ -313,7 +406,7 @@ php artisan up
           </div>
 
           <h4 className="text-lg font-bold mt-6 mb-3 text-gray-900">Static Website</h4>
-          <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="bg-gray-100 p-4 rounded-lg">
             <p className="font-semibold mb-2 text-gray-900">Local Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
 npm run build
@@ -328,44 +421,13 @@ rsync -av --delete ./dist/ /var/www/html/
     }
   };
 
-  return (
-    <div className="flex h-full">
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-sm border-r border-gray-200">
-        <div className="p-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Documentation</h2>
-          <nav className="space-y-1">
-            {Object.entries(sections).map(([key, section]) => {
-              const Icon = section.icon;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setActiveSection(key)}
-                  className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    activeSection === key
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon className="h-4 w-4 mr-3" />
-                  {section.title}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
+  const currentSection = sections[section] || sections['getting-started'];
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-8">
-          <div className="max-w-4xl mx-auto">
-            {sections[activeSection].content}
-          </div>
-        </div>
-      </div>
+  return (
+    <div className="max-w-4xl mx-auto">
+      {currentSection.content}
     </div>
   );
 }
 
-export default Documentation;
+export default DocumentationPage;
