@@ -6,10 +6,11 @@ AutoDeploy is now available through three different Homebrew formulas:
 
 ### 1. Complete Installation (CLI + GUI)
 ```bash
-brew install ahmadzein/autodeploy/autodeploy
+brew install ahmadzein/autodeploy
 ```
 - Installs both CLI and GUI components
 - Best for users who want the full experience
+- This is the default formula when no specific component is specified
 
 ### 2. CLI Only
 ```bash
@@ -50,15 +51,15 @@ brew install --cask ahmadzein/autodeploy/gui
 # First time setup
 brew tap ahmadzein/autodeploy
 
-# Install everything
-brew install ahmadzein/autodeploy/autodeploy
+# Install everything (default formula)
+brew install ahmadzein/autodeploy
 
 # Or install individually
 brew install ahmadzein/autodeploy/cli
 brew install --cask ahmadzein/autodeploy/gui
 
 # Upgrade
-brew upgrade ahmadzein/autodeploy/autodeploy
+brew upgrade ahmadzein/autodeploy
 brew upgrade ahmadzein/autodeploy/cli
 brew upgrade --cask ahmadzein/autodeploy/gui
 ```
