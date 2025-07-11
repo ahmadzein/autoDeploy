@@ -25,17 +25,27 @@ A secure local deployment automation tool that helps you deploy projects to remo
 
 ## Installation
 
-### CLI Only (via Homebrew)
+### Quick Install (Recommended)
 
 ```bash
-brew tap yourusername/autodeploy
+# One-time setup
+brew tap ahmadzein/autodeploy
+
+# Install CLI
 brew install autodeploy
+
+# Or install CLI + GUI
+brew install autodeploy --with-gui
 ```
 
-### GUI Application (via Homebrew Cask)
+### Alternative: Direct Install
 
 ```bash
-brew install --cask autodeploy-gui
+# CLI only
+brew install ahmadzein/autodeploy/autodeploy
+
+# CLI + GUI  
+brew install ahmadzein/autodeploy/autodeploy --with-gui
 ```
 
 ### From Source
