@@ -22,10 +22,28 @@ export class PipelineExecutor {
                 const spinner = ora(`Step ${i + 1}/${steps.length}: ${step.name}`).start();
                 
                 try {
+                    // Debug logging for main execute method
+                    console.log(chalk.gray(`[DEBUG] Processing step ${i + 1}: ${step.name}`));
+                    console.log(chalk.gray(`[DEBUG] Step interactive flag: ${step.interactive || false}`));
+                    console.log(chalk.gray(`[DEBUG] Step command: ${step.command}`));
+                    
                     let command = step.command;
                     
+                    // Check if this is an interactive command
+                    if (step.interactive) {
+                        console.log(chalk.gray(`[DEBUG] Step is marked as interactive in main execute`));
+                        // For Ghost commands, add --no-prompt
+                        const isGhostCommand = command.toLowerCase().includes('ghost ');
+                        if (isGhostCommand) {
+                            const oldCommand = command;
+                            command = command.replace(/ghost (\w+)/, 'ghost $1 --no-prompt');
+                            console.log(chalk.gray(`[DEBUG] Modified Ghost command in main execute from: ${oldCommand}`));
+                            console.log(chalk.gray(`[DEBUG] Modified Ghost command in main execute to: ${command}`));
+                        }
+                    }
+                    
                     // Escape single quotes in command
-                    const escapedCommand = step.command.replace(/'/g, "'\\''");
+                    const escapedCommand = command.replace(/'/g, "'\\''");
                     
                     // Source .bashrc and .profile explicitly, then run command
                     const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
@@ -36,6 +54,7 @@ export class PipelineExecutor {
                         command = `bash -c '${sourceFiles} cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
                     }
                     
+                    console.log(chalk.gray(`[DEBUG] Final command in main execute: ${command}`));
                     const result = await connection.exec(command);
                     
                     if (result.code === 0) {
@@ -103,7 +122,7 @@ export class PipelineExecutor {
         return true;
     }
 
-    async executeStep(step) {
+    async executeStep(step, providedInputs = {}) {
         const connection = new SSHConnection(this.sshConfig);
         
         try {
@@ -111,18 +130,75 @@ export class PipelineExecutor {
             
             let command = step.command;
             
-            // Escape single quotes in command
-            const escapedCommand = step.command.replace(/'/g, "'\\''");
+            // Debug logging
+            console.log(chalk.gray(`\n[DEBUG] Executing step: ${step.name}`));
+            console.log(chalk.gray(`[DEBUG] Original command: ${command}`));
+            console.log(chalk.gray(`[DEBUG] Interactive: ${step.interactive || false}`));
+            console.log(chalk.gray(`[DEBUG] Working dir: ${step.workingDir || '.'}`));
             
-            // Source .bashrc and .profile explicitly, then run command
-            const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
-            
-            if (!step.workingDir || step.workingDir === '.') {
-                command = `bash -c '${sourceFiles} cd ${this.projectPath} && ${escapedCommand}'`;
-            } else {
-                command = `bash -c '${sourceFiles} cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
+            // Handle environment variables
+            let envVarsString = '';
+            if (step.envVars && step.envVars.length > 0) {
+                const envVars = step.envVars.map(env => `export ${env.name}="${env.value}"`).join('; ');
+                envVarsString = `${envVars}; `;
+                console.log(chalk.gray(`[DEBUG] Environment vars: ${envVarsString}`));
             }
             
+            // Handle interactive commands
+            if (step.interactive) {
+                console.log(chalk.gray(`[DEBUG] Step is marked as interactive`));
+                // Check if we have inputs configured for auto-fill
+                if (step.inputs && step.inputs.length > 0) {
+                    console.log(chalk.gray(`[DEBUG] Step has ${step.inputs.length} configured inputs`));
+                    // Create an expect script for handling interactive inputs on remote server
+                    const expectInputs = step.inputs.map(input => {
+                        const value = providedInputs[input.prompt] || input.defaultValue || '';
+                        return `expect "${input.prompt}" { send "${value}\\r" }`;
+                    }).join('\n');
+                    
+                    // Create expect script that will run on the remote server
+                    const expectScript = `expect << 'EOF'
+spawn bash -c "${envVarsString}cd ${this.projectPath} && ${command}"
+${expectInputs}
+expect eof
+EOF`;
+                    
+                    command = expectScript;
+                    console.log(chalk.gray(`[DEBUG] Created expect script for interactive inputs`));
+                } else {
+                    // Interactive command without inputs - for Ghost commands, add --no-prompt
+                    const isGhostCommand = command.toLowerCase().includes('ghost ');
+                    console.log(chalk.gray(`[DEBUG] Is Ghost command: ${isGhostCommand}`));
+                    if (isGhostCommand) {
+                        const oldCommand = command;
+                        command = command.replace(/ghost (\w+)/, 'ghost $1 --no-prompt');
+                        console.log(chalk.gray(`[DEBUG] Modified Ghost command from: ${oldCommand}`));
+                        console.log(chalk.gray(`[DEBUG] Modified Ghost command to: ${command}`));
+                    }
+                    // Continue with normal execution
+                }
+            } else {
+                console.log(chalk.gray(`[DEBUG] Step is NOT marked as interactive`));
+            }
+            
+            // Process non-interactive commands or interactive commands after modification
+            if (!command.includes('expect << \'EOF\'')) {
+                // Escape single quotes in command
+                const escapedCommand = command.replace(/'/g, "'\\''");
+                
+                // Source .bashrc and .profile explicitly, then run command
+                const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
+                
+                // The Ghost command handling is now done above in the interactive section
+                
+                if (!step.workingDir || step.workingDir === '.') {
+                    command = `bash -c '${sourceFiles} ${envVarsString}cd ${this.projectPath} && ${escapedCommand}'`;
+                } else {
+                    command = `bash -c '${sourceFiles} ${envVarsString}cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
+                }
+            }
+            
+            console.log(chalk.gray(`[DEBUG] Final command to execute: ${command}`));
             const result = await connection.exec(command);
             connection.disconnect();
             
@@ -130,14 +206,16 @@ export class PipelineExecutor {
                 success: result.code === 0,
                 output: result.stdout,
                 error: result.stderr,
-                step: step.name
+                step: step.name,
+                interactive: step.interactive || false
             };
         } catch (error) {
             connection.disconnect();
             return {
                 success: false,
                 error: error.message,
-                step: step.name
+                step: step.name,
+                interactive: step.interactive || false
             };
         }
     }

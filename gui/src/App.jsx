@@ -7,6 +7,10 @@ import AddProject from './components/AddProject';
 import EditProject from './components/EditProject';
 import DeploymentView from './components/DeploymentView';
 import DocumentationPage from './components/DocumentationPage';
+import AddMonorepo from './components/AddMonorepo';
+import SubDeployments from './components/SubDeployments';
+import AddSubDeployment from './components/AddSubDeployment';
+import EditSubDeployment from './components/EditSubDeployment';
 
 function App() {
   return (
@@ -16,7 +20,11 @@ function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="projects" element={<ProjectList />} />
         <Route path="projects/add" element={<AddProject />} />
+        <Route path="projects/add-monorepo" element={<AddMonorepo />} />
         <Route path="projects/edit/:projectName" element={<EditProject />} />
+        <Route path="projects/:projectName/sub-deployments" element={<SubDeployments />} />
+        <Route path="projects/:projectName/add-sub" element={<AddSubDeployment />} />
+        <Route path="projects/:projectName/sub/:subName/edit" element={<EditSubDeployment />} />
         <Route path="deployments/:projectName" element={<DeploymentView />} />
         <Route path="docs/:section" element={<DocumentationPage />} />
         <Route path="docs" element={<Navigate to="/docs/getting-started" replace />} />

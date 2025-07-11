@@ -24,6 +24,9 @@ A secure local deployment automation tool that helps you deploy projects to remo
 - 📝 JSON editor mode for direct configuration editing
 - 🔧 Graceful handling of "nothing to commit" scenarios
 - 🌐 Integrated documentation viewer in GUI
+- 🔀 **Interactive command support** with auto-fill capabilities for user prompts
+- 📋 **Project and sub-deployment duplication** with name validation
+- 🔄 **Step reordering** in both CLI and GUI with intuitive controls
 
 ## Installation
 
@@ -90,6 +93,26 @@ autodeploy list-sub <name>      # List sub-deployments
 
 See [Monorepo Guide](MONOREPO_GUIDE.md) for detailed usage.
 
+### Duplicate Projects and Sub-deployments
+
+```bash
+# Duplicate an existing project with a new name
+autodeploy duplicate-project my-project
+
+# Duplicate a sub-deployment within a monorepo
+autodeploy duplicate-sub my-monorepo frontend
+```
+
+### Step Management and Reordering
+
+```bash
+# Reorder deployment steps for a regular project
+autodeploy reorder-steps my-project
+
+# Reorder steps for a specific sub-deployment
+autodeploy reorder-steps my-monorepo --sub frontend
+```
+
 ### List All Projects
 
 ```bash
@@ -130,6 +153,28 @@ This allows you to:
 - Add, remove, or reorder local steps (run on your machine)
 - Add, remove, or reorder remote steps (run on server)
 - Edit steps directly or in JSON format
+
+### Interactive Commands
+
+AutoDeploy supports interactive commands that require user input during deployment. When adding deployment steps, you can configure:
+
+- **Interactive Mode**: Mark commands that require user input
+- **Environment Variables**: Set custom environment variables for commands
+- **Auto-fill Inputs**: Configure expected prompts with default values
+
+**Example Interactive Step Configuration:**
+```
+Step Name: Ghost Backup
+Command: ghost backup
+Interactive: Yes
+Inputs:
+  - Prompt: "Enter your Ghost administrator email address"
+    Default: "admin@example.com"
+  - Prompt: "Enter backup location"
+    Default: "/tmp/backup"
+```
+
+During deployment, AutoDeploy will automatically provide the configured responses to interactive prompts, while still allowing manual override when needed.
 
 ### Remove a Project
 

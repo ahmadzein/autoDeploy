@@ -19,9 +19,15 @@ These options can be used with any command:
 | Command | Description |
 |---------|-------------|
 | `add-project` | Add a new project configuration |
+| `create-monorepo` | Create a new monorepo project |
+| `add-sub` | Add sub-deployment to monorepo |
 | `list` | List all configured projects |
+| `list-sub` | List sub-deployments of a monorepo |
 | `deploy` | Deploy a project |
 | `edit` | Edit project deployment steps |
+| `duplicate-project` | Duplicate an existing project |
+| `duplicate-sub` | Duplicate a sub-deployment |
+| `reorder-steps` | Reorder deployment steps |
 | `remove` | Remove a project |
 | `config` | Manage global configuration |
 | `logs` | View deployment logs |
@@ -440,6 +446,190 @@ alias ada='autodeploy add-project'
 | 4 | Deployment error |
 | 5 | Authentication error |
 | 127 | Command not found |
+
+### `create-monorepo`
+
+Create a new monorepo project for managing multiple sub-deployments.
+
+```bash
+autodeploy create-monorepo [options]
+```
+
+**Examples:**
+```bash
+# Interactive mode
+$ autodeploy create-monorepo
+? Project name: my-monorepo
+? Local monorepo path: /home/user/projects/my-monorepo
+? SSH host: example.com
+? SSH username: deploy
+? Remote base path: /var/www/apps
+```
+
+### `add-sub`
+
+Add a sub-deployment to an existing monorepo project.
+
+```bash
+autodeploy add-sub <project-name> [options]
+```
+
+**Examples:**
+```bash
+# Add sub-deployment to monorepo
+$ autodeploy add-sub my-monorepo
+? Sub-deployment name: frontend
+? Relative path from monorepo root: apps/frontend
+? Remote deployment path: /var/www/apps/frontend
+? Use same SSH credentials as parent project? Yes
+? Add deployment steps now? Yes
+```
+
+### `list-sub`
+
+List all sub-deployments for a monorepo project.
+
+```bash
+autodeploy list-sub <project-name> [options]
+```
+
+**Examples:**
+```bash
+$ autodeploy list-sub my-monorepo
+
+Sub-deployments for my-monorepo:
+
+1. frontend
+   Local: /home/user/projects/my-monorepo/apps/frontend
+   Remote: /var/www/apps/frontend
+   Local Steps: 2, Remote Steps: 3
+
+2. backend
+   Local: /home/user/projects/my-monorepo/apps/backend
+   Remote: /var/www/apps/backend
+   Local Steps: 1, Remote Steps: 4
+```
+
+### `duplicate-project`
+
+Duplicate an existing project with a new name.
+
+```bash
+autodeploy duplicate-project <project-name> [options]
+```
+
+**Examples:**
+```bash
+$ autodeploy duplicate-project my-website
+? New project name: my-website-staging
+? Duplicate "my-website" as "my-website-staging"? Yes
+✓ Project "my-website" duplicated as "my-website-staging"
+```
+
+### `duplicate-sub`
+
+Duplicate a sub-deployment within a monorepo.
+
+```bash
+autodeploy duplicate-sub <project-name> <sub-name> [options]
+```
+
+**Examples:**
+```bash
+$ autodeploy duplicate-sub my-monorepo frontend
+? New sub-deployment name: frontend-v2
+? Duplicate "frontend" as "frontend-v2"? Yes
+✓ Sub-deployment "frontend" duplicated as "frontend-v2" in "my-monorepo"
+```
+
+### `reorder-steps`
+
+Reorder deployment steps for a project or sub-deployment.
+
+```bash
+autodeploy reorder-steps <project-name> [options]
+```
+
+**Options:**
+- `-s, --sub <sub-name>` - Reorder steps for a specific sub-deployment
+
+**Examples:**
+```bash
+# Reorder steps for regular project
+$ autodeploy reorder-steps my-website
+? Which steps do you want to reorder? Local Steps
+
+Current local steps:
+1. Install dependencies - npm install
+2. Run tests - npm test
+3. Build project - npm run build
+
+? What would you like to do? Move step up
+? Which step do you want to move up? 3. Build project
+✓ Moved "Build project" up
+
+# Reorder steps for sub-deployment
+$ autodeploy reorder-steps my-monorepo --sub frontend
+```
+
+## Interactive Commands
+
+AutoDeploy supports interactive commands that can automatically respond to prompts during deployment. When adding steps, you can configure:
+
+### Interactive Step Configuration
+
+When adding a deployment step, you'll be prompted:
+
+```bash
+? Is this an interactive command (requires user input)? Yes
+? Add environment variables? No
+
+Interactive Inputs (for auto-filling prompts):
+? Expected prompt text: Enter your Ghost administrator email address
+? Default value to auto-fill: admin@example.com
+? Is this input required? Yes
+? Add another input? No
+```
+
+### Environment Variables
+
+For any step, you can add environment variables:
+
+```bash
+? Add environment variables? Yes
+
+Environment Variables:
+? Environment variable name: NODE_ENV
+? Environment variable value: production
+? Add another environment variable? Yes
+? Environment variable name: API_URL
+? Environment variable value: https://api.example.com
+? Add another environment variable? No
+```
+
+### Example Interactive Command
+
+```bash
+# Example: Ghost CMS backup with auto-filled email
+Step Name: Ghost Backup
+Command: ghost backup
+Working Directory: .
+Continue on Error: false
+Interactive: true
+Inputs:
+  - Prompt: "Enter your Ghost administrator email address"
+    Default: "admin@example.com"
+    Required: true
+Environment Variables:
+  - GHOST_URL: "https://blog.example.com"
+  - BACKUP_PATH: "/tmp/ghost-backup"
+```
+
+During deployment, AutoDeploy will:
+1. Set the environment variables
+2. Run the command
+3. Automatically respond to prompts with configured values
+4. Allow manual override if needed
 
 ## See Also
 

@@ -73,8 +73,32 @@ export const projectAPI = {
   },
 
   // Test connection
-  testConnection: async (projectName) => {
-    const response = await api.post(`/projects/${projectName}/test`);
+  testConnection: async (sshData) => {
+    const response = await api.post('/test-connection', sshData);
+    return response.data;
+  },
+
+  // Get sub-deployments for monorepo
+  getSubDeployments: async (projectName) => {
+    const response = await api.get(`/projects/${projectName}/sub-deployments`);
+    return response.data;
+  },
+
+  // Add sub-deployment to monorepo
+  addSubDeployment: async (projectName, subData) => {
+    const response = await api.post(`/projects/${projectName}/sub-deployments`, subData);
+    return response.data;
+  },
+
+  // Update sub-deployment
+  updateSubDeployment: async (projectName, subName, subData) => {
+    const response = await api.put(`/projects/${projectName}/sub-deployments/${subName}`, subData);
+    return response.data;
+  },
+
+  // Delete sub-deployment
+  deleteSubDeployment: async (projectName, subName) => {
+    const response = await api.delete(`/projects/${projectName}/sub-deployments/${subName}`);
     return response.data;
   },
 };

@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Square, Terminal, Clock, CheckCircle, XCircle, AlertCircle, History } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Play, Square, Terminal, Clock, CheckCircle, XCircle, AlertCircle, History, FolderTree } from 'lucide-react';
 import { projectAPI } from '../utils/api';
 
 function DeploymentView() {
   const { projectName } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const terminalRef = useRef(null);
   const eventSourceRef = useRef(null);
+  
+  // Get monorepo parameters from URL
+  const subDeployment = searchParams.get('sub');
+  const deployAll = searchParams.get('all') === 'true';
   
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +25,8 @@ function DeploymentView() {
   const [currentStepStartTime, setCurrentStepStartTime] = useState(null);
   const [stepTimings, setStepTimings] = useState({});
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [subDeployments, setSubDeployments] = useState([]);
+  const [selectedSubs, setSelectedSubs] = useState([]);
 
   useEffect(() => {
     fetchProject();
@@ -54,6 +61,19 @@ function DeploymentView() {
     try {
       const data = await projectAPI.getOne(projectName);
       setProject(data);
+      
+      // If it's a monorepo, fetch sub-deployments
+      if (data.type === 'monorepo') {
+        const subs = await projectAPI.getSubDeployments(projectName);
+        setSubDeployments(subs || []);
+        
+        // Pre-select based on URL params
+        if (deployAll) {
+          setSelectedSubs(subs.map(s => s.name));
+        } else if (subDeployment) {
+          setSelectedSubs([subDeployment]);
+        }
+      }
     } catch (err) {
       console.error('Error fetching project:', err);
       navigate('/projects');
@@ -83,6 +103,12 @@ function DeploymentView() {
       return;
     }
     
+    // For monorepos, ensure we have selected sub-deployments
+    if (project?.type === 'monorepo' && selectedSubs.length === 0) {
+      alert('Please select at least one sub-deployment');
+      return;
+    }
+    
     setDeploying(true);
     setDeploymentStatus('running');
     setLogs([]);
@@ -90,8 +116,20 @@ function DeploymentView() {
     setDeploymentStartTime(Date.now());
     addLog('Starting deployment...', 'info');
 
+    // Build query params for monorepo deployments
+    let deployUrl = `/api/deployments/${projectName}`;
+    if (project?.type === 'monorepo') {
+      const params = new URLSearchParams();
+      if (selectedSubs.length === subDeployments.length) {
+        params.set('all', 'true');
+      } else {
+        selectedSubs.forEach(sub => params.append('sub', sub));
+      }
+      deployUrl += `?${params.toString()}`;
+    }
+
     // Create EventSource for streaming logs
-    const eventSource = new EventSource(`/api/deployments/${projectName}`);
+    const eventSource = new EventSource(deployUrl);
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
@@ -273,7 +311,15 @@ function DeploymentView() {
         </button>
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-3xl font-bold text-gray-900">Deploy {project.name}</h2>
+            <h2 className="text-3xl font-bold text-gray-900">
+              Deploy {project.name}
+              {project.type === 'monorepo' && (
+                <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                  <FolderTree className="h-4 w-4 mr-1" />
+                  Monorepo
+                </span>
+              )}
+            </h2>
             <p className="mt-2 text-gray-600">{project.ssh.host}</p>
           </div>
           <div className="flex items-center space-x-4">
@@ -300,10 +346,75 @@ function DeploymentView() {
       </div>
 
       {/* Project Info */}
+      {/* Monorepo Sub-deployment Selector */}
+      {project.type === 'monorepo' && subDeployments.length > 0 && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
+            <FolderTree className="h-5 w-5 mr-2" />
+            Select Sub-deployments
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {subDeployments.map((sub) => (
+              <label
+                key={sub.name}
+                className="flex items-center p-3 bg-white rounded-md border border-purple-100 hover:border-purple-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSubs.includes(sub.name)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedSubs([...selectedSubs, sub.name]);
+                    } else {
+                      setSelectedSubs(selectedSubs.filter(s => s !== sub.name));
+                    }
+                  }}
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                />
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-medium text-gray-900">{sub.name}</p>
+                  <p className="text-xs text-gray-600">{sub.relativePath}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedSubs(subDeployments.map(s => s.name))}
+              className="text-sm text-purple-700 hover:text-purple-900 font-medium"
+            >
+              Select All
+            </button>
+            <span className="text-gray-400">|</span>
+            <button
+              type="button"
+              onClick={() => setSelectedSubs([])}
+              className="text-sm text-purple-700 hover:text-purple-900 font-medium"
+            >
+              Clear All
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Configuration</h3>
           <dl className="space-y-3">
+            <div>
+              <dt className="text-sm font-semibold text-gray-700">Type</dt>
+              <dd className="text-sm font-medium text-gray-900">
+                {project.type === 'monorepo' ? (
+                  <span className="inline-flex items-center">
+                    <FolderTree className="h-4 w-4 mr-1 text-purple-600" />
+                    Monorepo
+                  </span>
+                ) : (
+                  'Standard Project'
+                )}
+              </dd>
+            </div>
             <div>
               <dt className="text-sm font-semibold text-gray-700">Local Path</dt>
               <dd className="text-sm font-medium text-gray-900">{project.localPath}</dd>
@@ -316,50 +427,132 @@ function DeploymentView() {
               <dt className="text-sm font-semibold text-gray-700">SSH Connection</dt>
               <dd className="text-sm font-medium text-gray-900">{project.ssh.username}@{project.ssh.host}:{project.ssh.port || 22}</dd>
             </div>
+            {project.type === 'monorepo' && (
+              <div>
+                <dt className="text-sm font-semibold text-gray-700">Sub-deployments</dt>
+                <dd className="text-sm font-medium text-gray-900">{subDeployments.length} configured</dd>
+              </div>
+            )}
           </dl>
         </div>
 
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Deployment Steps</h3>
           
-          {/* Local Steps */}
-          {project.localSteps && project.localSteps.length > 0 && (
-            <>
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">Local Steps</h4>
-              <ol className="space-y-2 mb-4">
-                {project.localSteps.map((step, index) => (
-                  <li key={`local-${index}`} className="flex items-start">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-700 mr-3">
-                      L{index + 1}
-                    </span>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{step.name}</p>
-                      <p className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-1 rounded mt-1">{step.command}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </>
-          )}
-          
-          {/* Remote Steps */}
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">Remote Steps</h4>
-          {project.deploymentSteps && project.deploymentSteps.length > 0 ? (
-            <ol className="space-y-2">
-              {project.deploymentSteps.map((step, index) => (
-                <li key={`remote-${index}`} className="flex items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700 mr-3">
-                    R{index + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{step.name}</p>
-                    <p className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-1 rounded mt-1">{step.command}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
+          {project.type === 'monorepo' ? (
+            <div>
+              {selectedSubs.length === 0 ? (
+                <p className="text-sm text-gray-500">Select sub-deployments to see their steps</p>
+              ) : selectedSubs.length === 1 ? (
+                // Show steps for single selected sub-deployment
+                (() => {
+                  const sub = subDeployments.find(s => s.name === selectedSubs[0]);
+                  if (!sub) return null;
+                  return (
+                    <>
+                      <p className="text-sm text-purple-700 font-medium mb-3">Steps for: {sub.name}</p>
+                      {/* Local Steps */}
+                      {sub.localSteps && sub.localSteps.length > 0 && (
+                        <>
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Local Steps</h4>
+                          <ol className="space-y-2 mb-4">
+                            {sub.localSteps.map((step, index) => (
+                              <li key={`local-${index}`} className="flex items-start">
+                                <span className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-700 mr-3">
+                                  L{index + 1}
+                                </span>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">{step.name}</p>
+                                  <p className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-1 rounded mt-1">{step.command}</p>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        </>
+                      )}
+                      
+                      {/* Remote Steps */}
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Remote Steps</h4>
+                      {sub.deploymentSteps && sub.deploymentSteps.length > 0 ? (
+                        <ol className="space-y-2">
+                          {sub.deploymentSteps.map((step, index) => (
+                            <li key={`remote-${index}`} className="flex items-start">
+                              <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700 mr-3">
+                                R{index + 1}
+                              </span>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{step.name}</p>
+                                <p className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-1 rounded mt-1">{step.command}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="text-sm text-gray-500">No remote steps configured</p>
+                      )}
+                    </>
+                  );
+                })()
+              ) : (
+                // Multiple sub-deployments selected
+                <div>
+                  <p className="text-sm text-purple-700 font-medium mb-2">
+                    {selectedSubs.length} sub-deployments selected:
+                  </p>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    {selectedSubs.map(name => (
+                      <li key={name}>• {name}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Each sub-deployment will run with its own configured steps
+                  </p>
+                </div>
+              )}
+            </div>
           ) : (
-            <p className="text-sm text-gray-500">No remote steps configured</p>
+            // Standard project steps
+            <>
+              {/* Local Steps */}
+              {project.localSteps && project.localSteps.length > 0 && (
+                <>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Local Steps</h4>
+                  <ol className="space-y-2 mb-4">
+                    {project.localSteps.map((step, index) => (
+                      <li key={`local-${index}`} className="flex items-start">
+                        <span className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-700 mr-3">
+                          L{index + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{step.name}</p>
+                          <p className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-1 rounded mt-1">{step.command}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+              
+              {/* Remote Steps */}
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Remote Steps</h4>
+              {project.deploymentSteps && project.deploymentSteps.length > 0 ? (
+                <ol className="space-y-2">
+                  {project.deploymentSteps.map((step, index) => (
+                    <li key={`remote-${index}`} className="flex items-start">
+                      <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700 mr-3">
+                        R{index + 1}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">{step.name}</p>
+                        <p className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-1 rounded mt-1">{step.command}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-gray-500">No remote steps configured</p>
+              )}
+            </>
           )}
         </div>
       </div>

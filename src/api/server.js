@@ -100,6 +100,28 @@ export function createAPIServer(port = 3000) {
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
+        
+        // Handle monorepo deployments
+        let deploymentTargets = [];
+        if (project.type === 'monorepo') {
+            const monorepoConfig = configManager.getMonorepoConfig();
+            const allSubs = monorepoConfig.getSubDeployments(req.params.name);
+            
+            if (req.query.all === 'true') {
+                // Deploy all sub-deployments
+                deploymentTargets = allSubs;
+            } else if (req.query.sub) {
+                // Deploy specific sub-deployments
+                const requestedSubs = Array.isArray(req.query.sub) ? req.query.sub : [req.query.sub];
+                deploymentTargets = allSubs.filter(sub => requestedSubs.includes(sub.name));
+                
+                if (deploymentTargets.length === 0) {
+                    return res.status(400).json({ error: 'No valid sub-deployments found' });
+                }
+            } else {
+                return res.status(400).json({ error: 'Monorepo deployment requires sub-deployment selection' });
+            }
+        }
 
         // Set headers for SSE
         res.writeHead(200, {
@@ -129,14 +151,214 @@ export function createAPIServer(port = 3000) {
         });
 
         // Send deployment started event
+        const deploymentMessage = project.type === 'monorepo' 
+            ? `Deploying ${deploymentTargets.length} sub-deployment(s) from ${project.name}...`
+            : `Deploying ${project.name}...`;
+            
         res.write(`data: ${JSON.stringify({ 
             type: 'start', 
-            message: `Deploying ${project.name}...` 
+            message: deploymentMessage
         })}\n\n`);
 
         try {
-            // Execute local steps first
-            if (project.localSteps && project.localSteps.length > 0) {
+            // Handle monorepo deployments
+            if (project.type === 'monorepo') {
+                const monorepoConfig = configManager.getMonorepoConfig();
+                
+                // Execute git operations at monorepo root first
+                const gitOps = new GitOperations(project.localPath);
+                const isGitRepo = await gitOps.isGitRepo();
+                
+                if (isGitRepo) {
+                    res.write(`data: ${JSON.stringify({ 
+                        type: 'progress', 
+                        message: 'Committing and pushing monorepo changes...' 
+                    })}\n\n`);
+                    
+                    const gitResult = await gitOps.commitAndPush(`Auto-deploy: ${new Date().toISOString()}`);
+                    
+                    res.write(`data: ${JSON.stringify({ 
+                        type: gitResult.success ? 'progress' : 'error', 
+                        message: gitResult.message 
+                    })}\n\n`);
+                }
+                
+                // Deploy each sub-deployment
+                for (const subDeployment of deploymentTargets) {
+                    res.write(`data: ${JSON.stringify({ 
+                        type: 'progress', 
+                        message: `\n=== Deploying sub-project: ${subDeployment.name} ===` 
+                    })}\n\n`);
+                    
+                    // Execute local steps for sub-deployment
+                    if (subDeployment.localSteps && subDeployment.localSteps.length > 0) {
+                        res.write(`data: ${JSON.stringify({ 
+                            type: 'progress', 
+                            message: `Executing local steps for ${subDeployment.name}...` 
+                        })}\n\n`);
+                        
+                        const { exec } = await import('child_process');
+                        const { promisify } = await import('util');
+                        const execAsync = promisify(exec);
+                        
+                        for (const step of subDeployment.localSteps) {
+                            const stepStartTime = Date.now();
+                            let workingDir = '';
+                            
+                            res.write(`data: ${JSON.stringify({ 
+                                type: 'step', 
+                                message: `[${subDeployment.name}/Local] Running: ${step.name}` 
+                            })}\n\n`);
+                            
+                            try {
+                                const trimmedLocalPath = subDeployment.localPath.trim();
+                                workingDir = step.workingDir === '.' 
+                                    ? trimmedLocalPath 
+                                    : join(trimmedLocalPath, step.workingDir);
+                                
+                                const fs = await import('fs');
+                                if (!fs.existsSync(workingDir)) {
+                                    throw new Error(`Working directory does not exist: ${workingDir}\nSub-deployment localPath: ${subDeployment.localPath}\nStep workingDir: ${step.workingDir}\nCalculated workingDir: ${workingDir}`);
+                                }
+                                
+                                let stdout, stderr;
+                                try {
+                                    const result = await execAsync(step.command, {
+                                        cwd: workingDir,
+                                        maxBuffer: 1024 * 1024 * 10,
+                                        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+                                        env: { ...process.env, PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin' }
+                                    });
+                                    stdout = result.stdout;
+                                    stderr = result.stderr;
+                                } catch (execError) {
+                                    if (execError.stdout) stdout = execError.stdout;
+                                    if (execError.stderr) stderr = execError.stderr;
+                                    
+                                    const enhancedError = new Error(execError.message || 'Command failed');
+                                    enhancedError.code = execError.code;
+                                    enhancedError.stderr = stderr;
+                                    enhancedError.stdout = stdout;
+                                    throw enhancedError;
+                                }
+                                
+                                const output = stdout || stderr || 'Command completed';
+                                
+                                deploymentSteps.push({
+                                    name: `[${subDeployment.name}/Local] ${step.name}`,
+                                    success: true,
+                                    output: output,
+                                    duration: Date.now() - stepStartTime
+                                });
+                                
+                                res.write(`data: ${JSON.stringify({ 
+                                    type: 'step-complete', 
+                                    message: output,
+                                    step: `${subDeployment.name}/${step.name}`
+                                })}\n\n`);
+                            } catch (error) {
+                                const isGitCommand = step.command.toLowerCase().includes('git commit');
+                                const isNothingToCommit = error.message && (
+                                    error.message.includes('nothing to commit') ||
+                                    error.message.includes('working tree clean') ||
+                                    (error.code === 1 && isGitCommand)
+                                );
+                                
+                                if (isNothingToCommit) {
+                                    const message = 'Nothing to commit, working tree clean';
+                                    
+                                    deploymentSteps.push({
+                                        name: `[${subDeployment.name}/Local] ${step.name}`,
+                                        success: true,
+                                        output: message,
+                                        duration: Date.now() - stepStartTime
+                                    });
+                                    
+                                    res.write(`data: ${JSON.stringify({ 
+                                        type: 'step-complete', 
+                                        message: message,
+                                        step: `${subDeployment.name}/${step.name}`
+                                    })}\n\n`);
+                                } else {
+                                    let errorDetails = error.message;
+                                    if (error.stderr) {
+                                        errorDetails += `\nStderr: ${error.stderr}`;
+                                    }
+                                    
+                                    deploymentSteps.push({
+                                        name: `[${subDeployment.name}/Local] ${step.name}`,
+                                        success: false,
+                                        output: errorDetails,
+                                        duration: Date.now() - stepStartTime
+                                    });
+                                    
+                                    res.write(`data: ${JSON.stringify({ 
+                                        type: 'step-error', 
+                                        message: errorDetails,
+                                        step: `${subDeployment.name}/${step.name}`
+                                    })}\n\n`);
+                                    
+                                    if (!step.continueOnError) {
+                                        deploymentSuccess = false;
+                                        throw new Error(`Local step failed: ${subDeployment.name}/${step.name}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Execute remote steps for sub-deployment
+                    if (subDeployment.deploymentSteps && subDeployment.deploymentSteps.length > 0) {
+                        const sshConfig = subDeployment.ssh || project.ssh;
+                        const executor = new PipelineExecutor(sshConfig, subDeployment.remotePath);
+                        
+                        for (const step of subDeployment.deploymentSteps) {
+                            const stepStartTime = Date.now();
+                            
+                            res.write(`data: ${JSON.stringify({ 
+                                type: 'step', 
+                                message: `[${subDeployment.name}/Remote] Running: ${step.name}` 
+                            })}\n\n`);
+                            
+                            const result = await executor.executeStep(step);
+                            
+                            deploymentSteps.push({
+                                name: `[${subDeployment.name}] ${step.name}`,
+                                success: result.success,
+                                output: result.output || result.error,
+                                duration: Date.now() - stepStartTime
+                            });
+                            
+                            res.write(`data: ${JSON.stringify({ 
+                                type: result.success ? 'step-complete' : 'step-error', 
+                                message: result.output || result.error,
+                                step: `${subDeployment.name}/${step.name}`
+                            })}\n\n`);
+                            
+                            if (!result.success && !step.continueOnError) {
+                                deploymentSuccess = false;
+                                throw new Error(`Step failed: ${subDeployment.name}/${step.name}`);
+                            }
+                        }
+                    }
+                    
+                    // Record sub-deployment
+                    monorepoConfig.recordSubDeployment(project.name, subDeployment.name, deploymentSuccess, {
+                        duration: Date.now() - startTime,
+                        steps: deploymentSteps.filter(s => s.name.includes(subDeployment.name))
+                    });
+                }
+                
+                // Send completion
+                res.write(`data: ${JSON.stringify({ 
+                    type: 'complete', 
+                    message: `Successfully deployed ${deploymentTargets.length} sub-project(s)!` 
+                })}\n\n`);
+                
+            } else {
+                // Standard project deployment (original logic)
+                // Execute local steps first
+                if (project.localSteps && project.localSteps.length > 0) {
                 res.write(`data: ${JSON.stringify({ 
                     type: 'progress', 
                     message: 'Executing local steps...' 
@@ -343,6 +565,7 @@ export function createAPIServer(port = 3000) {
             
             // Send a final close event
             res.write(`event: close\ndata: {}\n\n`);
+            } // End of standard deployment
         } catch (error) {
             deploymentSuccess = false;
             
@@ -379,6 +602,95 @@ export function createAPIServer(port = 3000) {
     app.get('/api/stats', (req, res) => {
         const stats = configManager.getDeploymentStats();
         res.json(stats);
+    });
+
+    // Monorepo endpoints
+    
+    // Get sub-deployments for a monorepo
+    app.get('/api/projects/:name/sub-deployments', (req, res) => {
+        const project = configManager.getProject(req.params.name);
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+        if (project.type !== 'monorepo') {
+            return res.status(400).json({ error: 'Project is not a monorepo' });
+        }
+        
+        const monorepoConfig = configManager.getMonorepoConfig();
+        const subDeployments = monorepoConfig.getSubDeployments(req.params.name);
+        res.json(subDeployments);
+    });
+    
+    // Add sub-deployment to monorepo
+    app.post('/api/projects/:name/sub-deployments', async (req, res) => {
+        try {
+            const project = configManager.getProject(req.params.name);
+            if (!project) {
+                return res.status(404).json({ error: 'Project not found' });
+            }
+            if (project.type !== 'monorepo') {
+                return res.status(400).json({ error: 'Project is not a monorepo' });
+            }
+            
+            const subData = req.body;
+            
+            // Test SSH connection if not inheriting
+            if (!subData.inheritSSH && subData.ssh) {
+                const sshConnection = new SSHConnection(subData.ssh);
+                const testResult = await sshConnection.testConnection();
+                
+                if (!testResult.success) {
+                    return res.status(400).json({ 
+                        error: 'SSH connection failed', 
+                        message: testResult.message 
+                    });
+                }
+            }
+            
+            const monorepoConfig = configManager.getMonorepoConfig();
+            monorepoConfig.addSubDeployment(req.params.name, subData);
+            res.status(201).json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+    
+    // Update sub-deployment
+    app.put('/api/projects/:name/sub-deployments/:subName', (req, res) => {
+        try {
+            const project = configManager.getProject(req.params.name);
+            if (!project) {
+                return res.status(404).json({ error: 'Project not found' });
+            }
+            if (project.type !== 'monorepo') {
+                return res.status(400).json({ error: 'Project is not a monorepo' });
+            }
+            
+            const monorepoConfig = configManager.getMonorepoConfig();
+            monorepoConfig.updateSubDeployment(req.params.name, req.params.subName, req.body);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+    
+    // Delete sub-deployment
+    app.delete('/api/projects/:name/sub-deployments/:subName', (req, res) => {
+        try {
+            const project = configManager.getProject(req.params.name);
+            if (!project) {
+                return res.status(404).json({ error: 'Project not found' });
+            }
+            if (project.type !== 'monorepo') {
+                return res.status(400).json({ error: 'Project is not a monorepo' });
+            }
+            
+            const monorepoConfig = configManager.getMonorepoConfig();
+            monorepoConfig.deleteSubDeployment(req.params.name, req.params.subName);
+            res.json({ success: true });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
     });
 
     // Get documentation structure

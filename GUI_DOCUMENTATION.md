@@ -18,6 +18,10 @@ AutoDeploy GUI is a modern web-based interface for managing deployment configura
 
 ### Key Features
 - **Project Management**: Create, edit, and delete deployment projects
+- **Monorepo Support**: Manage multiple sub-deployments within a single repository
+- **Interactive Commands**: Configure auto-fill responses for interactive deployment steps
+- **Project Duplication**: Clone existing projects and sub-deployments with new names
+- **Step Reordering**: Drag-and-drop reordering of deployment steps
 - **Real-time Deployment**: Live deployment status with terminal-style output
 - **Deployment History**: Track all deployments with detailed logs
 - **Statistics Dashboard**: Monitor deployment metrics and success rates
@@ -104,14 +108,31 @@ The dashboard provides an at-a-glance view of your deployment infrastructure:
    - **Command**: Shell command to execute
    - **Working Directory**: Relative to remote project path
    - **Continue on Error**: Whether to proceed if step fails
+   - **Interactive Mode**: Mark commands that require user input
+   - **Environment Variables**: Set custom environment variables
+   - **Auto-fill Inputs**: Configure responses for interactive prompts
 4. Test connection before saving
 
 #### Editing Projects
 - Access via settings icon on project card
 - Modify all project settings
 - Add, remove, or reorder deployment steps
-- Drag-and-drop step reordering
+- Drag-and-drop step reordering with move up/down buttons
 - Test connection after changes
+
+#### Monorepo Management
+- **Create Monorepo**: Special project type for multiple sub-deployments
+- **Sub-deployment Management**: Add, edit, and manage individual sub-projects
+- **Coordinated Deployment**: Deploy all sub-projects or selected ones
+- **Individual SSH Settings**: Override SSH credentials per sub-deployment
+- **Step Inheritance**: Configure deployment steps for each sub-project
+
+#### Project Duplication
+- **Clone Projects**: Duplicate existing projects with new names
+- **Clone Sub-deployments**: Duplicate sub-deployments within monorepos
+- **Configuration Copying**: All settings, steps, and configurations are copied
+- **History Exclusion**: Deployment history is not copied to new projects
+- **Name Validation**: Prevents duplicate names and conflicts
 
 #### Project Cards Display
 - Project name and SSH host
@@ -119,6 +140,37 @@ The dashboard provides an at-a-glance view of your deployment infrastructure:
 - Number of deployment steps
 - Last deployment time and status
 - Quick deploy and edit actions
+- **Monorepo Indicator**: Special badge for monorepo projects
+- **Sub-deployment Count**: Number of configured sub-deployments
+
+#### Interactive Command Configuration
+
+When adding deployment steps, you can configure interactive commands:
+
+1. **Enable Interactive Mode**: Check the "Interactive command" option
+2. **Add Environment Variables**:
+   - Variable name (e.g., "NODE_ENV")
+   - Variable value (e.g., "production")
+3. **Configure Auto-fill Inputs**:
+   - Expected prompt text (e.g., "Enter your email address")
+   - Default response value (e.g., "admin@example.com")
+   - Required flag
+
+**Example Configuration:**
+```
+Step: Ghost Backup
+Command: ghost backup
+Interactive: ✓ Enabled
+Environment Variables:
+  - GHOST_URL: https://blog.example.com
+  - BACKUP_PATH: /tmp/backup
+Auto-fill Inputs:
+  - Prompt: "Enter your Ghost administrator email address"
+    Default: "admin@example.com"
+    Required: ✓
+```
+
+During deployment, AutoDeploy will automatically provide the configured responses while displaying the interaction in the real-time terminal.
 
 ### 3. Deployment Interface
 

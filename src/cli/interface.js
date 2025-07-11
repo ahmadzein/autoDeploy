@@ -15,6 +15,121 @@ import { handleEditCommand } from './edit-command.js';
 const program = new Command();
 const configManager = new ConfigManager();
 
+// Helper function to create a step with all features
+async function createStep(stepType = 'deployment') {
+    const step = await inquirer.prompt([
+        {
+            type: 'input',
+            name: 'name',
+            message: `${stepType} step name:`,
+            validate: input => input.length > 0 || 'Step name is required'
+        },
+        {
+            type: 'input',
+            name: 'command',
+            message: `Command to run:`,
+            validate: input => input.length > 0 || 'Command is required'
+        },
+        {
+            type: 'input',
+            name: 'workingDir',
+            message: 'Working directory (relative to project, default: .):',
+            default: '.'
+        },
+        {
+            type: 'confirm',
+            name: 'continueOnError',
+            message: 'Continue on error?',
+            default: false
+        },
+        {
+            type: 'confirm',
+            name: 'interactive',
+            message: 'Is this an interactive command (requires user input)?',
+            default: false
+        }
+    ]);
+
+    // Add environment variables
+    const { addEnvVars } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'addEnvVars',
+        message: 'Add environment variables?',
+        default: false
+    }]);
+
+    step.envVars = [];
+    if (addEnvVars) {
+        console.log(chalk.blue('\nEnvironment Variables:'));
+        let addMore = true;
+        while (addMore) {
+            const envVar = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'name',
+                    message: 'Environment variable name:',
+                    validate: input => input.length > 0 || 'Variable name is required'
+                },
+                {
+                    type: 'input',
+                    name: 'value',
+                    message: 'Environment variable value:',
+                    validate: input => input.length > 0 || 'Variable value is required'
+                }
+            ]);
+            step.envVars.push(envVar);
+
+            const { more } = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'more',
+                message: 'Add another environment variable?',
+                default: false
+            }]);
+            addMore = more;
+        }
+    }
+
+    // Add interactive inputs
+    step.inputs = [];
+    if (step.interactive) {
+        console.log(chalk.blue('\nInteractive Inputs (for auto-filling prompts):'));
+        let addMore = true;
+        while (addMore) {
+            const input = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'prompt',
+                    message: 'Expected prompt text (e.g., "Enter your email address"):',
+                    validate: input => input.length > 0 || 'Prompt text is required'
+                },
+                {
+                    type: 'input',
+                    name: 'defaultValue',
+                    message: 'Default value to auto-fill:',
+                    default: ''
+                },
+                {
+                    type: 'confirm',
+                    name: 'required',
+                    message: 'Is this input required?',
+                    default: true
+                }
+            ]);
+            step.inputs.push(input);
+
+            const { more } = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'more',
+                message: 'Add another input?',
+                default: false
+            }]);
+            addMore = more;
+        }
+    }
+
+    return step;
+}
+
 program
     .name('autodeploy')
     .description('Local deployment automation tool')
@@ -95,33 +210,7 @@ program
             console.log(chalk.blue('\nLocal steps run on your machine before deployment:'));
             let addMore = true;
             while (addMore) {
-                const step = await inquirer.prompt([
-                    {
-                        type: 'input',
-                        name: 'name',
-                        message: 'Local step name:',
-                        validate: input => input.length > 0 || 'Step name is required'
-                    },
-                    {
-                        type: 'input',
-                        name: 'command',
-                        message: 'Command to run locally:',
-                        validate: input => input.length > 0 || 'Command is required'
-                    },
-                    {
-                        type: 'input',
-                        name: 'workingDir',
-                        message: 'Working directory (relative to project, default: .):',
-                        default: '.'
-                    },
-                    {
-                        type: 'confirm',
-                        name: 'continueOnError',
-                        message: 'Continue on error?',
-                        default: false
-                    }
-                ]);
-
+                const step = await createStep('local');
                 localSteps.push(step);
 
                 const { more } = await inquirer.prompt([
@@ -141,33 +230,7 @@ program
             console.log(chalk.blue('\nRemote steps run on the server after deployment:'));
             let addMore = true;
             while (addMore) {
-                const step = await inquirer.prompt([
-                    {
-                        type: 'input',
-                        name: 'name',
-                        message: 'Remote step name:',
-                        validate: input => input.length > 0 || 'Step name is required'
-                    },
-                    {
-                        type: 'input',
-                        name: 'command',
-                        message: 'Command to run:',
-                        validate: input => input.length > 0 || 'Command is required'
-                    },
-                    {
-                        type: 'input',
-                        name: 'workingDir',
-                        message: 'Working directory (relative to project, default: .):',
-                        default: '.'
-                    },
-                    {
-                        type: 'confirm',
-                        name: 'continueOnError',
-                        message: 'Continue on error?',
-                        default: false
-                    }
-                ]);
-
+                const step = await createStep('remote');
                 steps.push(step);
 
                 const { more } = await inquirer.prompt([
@@ -449,29 +512,10 @@ program
             }]);
 
             if (addLocalSteps) {
+                console.log(chalk.blue('\nLocal steps run on your machine before deployment:'));
                 let addMore = true;
                 while (addMore) {
-                    const step = await inquirer.prompt([
-                        {
-                            type: 'input',
-                            name: 'name',
-                            message: 'Local step name:',
-                            validate: input => input.length > 0 || 'Step name is required'
-                        },
-                        {
-                            type: 'input',
-                            name: 'command',
-                            message: 'Command to run:',
-                            validate: input => input.length > 0 || 'Command is required'
-                        },
-                        {
-                            type: 'input',
-                            name: 'workingDir',
-                            message: 'Working directory (relative to sub-project):',
-                            default: '.'
-                        }
-                    ]);
-                    
+                    const step = await createStep('local');
                     localSteps.push(step);
                     
                     const { more } = await inquirer.prompt([{
@@ -495,29 +539,10 @@ program
             }]);
 
             if (addRemoteSteps) {
+                console.log(chalk.blue('\nRemote steps run on the server after deployment:'));
                 let addMore = true;
                 while (addMore) {
-                    const step = await inquirer.prompt([
-                        {
-                            type: 'input',
-                            name: 'name',
-                            message: 'Remote step name:',
-                            validate: input => input.length > 0 || 'Step name is required'
-                        },
-                        {
-                            type: 'input',
-                            name: 'command',
-                            message: 'Command to run:',
-                            validate: input => input.length > 0 || 'Command is required'
-                        },
-                        {
-                            type: 'input',
-                            name: 'workingDir',
-                            message: 'Working directory:',
-                            default: '.'
-                        }
-                    ]);
-                    
+                    const step = await createStep('remote');
                     remoteSteps.push(step);
                     
                     const { more } = await inquirer.prompt([{
@@ -653,7 +678,7 @@ program
 
             // Commit changes in monorepo root first
             const git = new GitOperations(project.localPath);
-            const hasGit = await git.isGitRepository();
+            const hasGit = await git.isGitRepo();
             
             if (hasGit) {
                 console.log(chalk.blue('📝 Committing monorepo changes...\n'));
@@ -697,7 +722,8 @@ program
                 const subProject = {
                     ...subDep,
                     name: `${project.name}/${subDep.name}`,
-                    localPath: subDep.localPath
+                    localPath: subDep.localPath,
+                    ssh: subDep.ssh || project.ssh // Inherit SSH from parent if not specified
                 };
 
                 // Deploy using existing logic
@@ -1011,6 +1037,247 @@ program
         } catch (error) {
             console.error(chalk.red('Failed to start GUI service:'), error.message);
             process.exit(1);
+        }
+    });
+
+// Duplicate project command
+program
+    .command('duplicate-project <project-name>')
+    .description('Duplicate an existing project with a new name')
+    .action(async (projectName) => {
+        const project = configManager.getProject(projectName);
+        if (!project) {
+            console.log(chalk.red(`Project "${projectName}" not found`));
+            return;
+        }
+
+        const answers = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'newName',
+                message: 'New project name:',
+                validate: input => {
+                    if (input.length === 0) return 'Project name is required';
+                    if (configManager.getProject(input)) return 'Project with this name already exists';
+                    return true;
+                }
+            },
+            {
+                type: 'confirm',
+                name: 'confirm',
+                message: `Duplicate "${projectName}" as "${answers?.newName || '<new-name>'}"?`,
+                default: true
+            }
+        ]);
+
+        if (!answers.confirm) {
+            console.log(chalk.yellow('Duplication cancelled'));
+            return;
+        }
+
+        const duplicatedProject = {
+            ...project,
+            name: answers.newName,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        // Remove deployment history and stats for the copy
+        delete duplicatedProject.deploymentHistory;
+        delete duplicatedProject.lastDeployment;
+        delete duplicatedProject.deploymentCount;
+        delete duplicatedProject.lastDeploymentStatus;
+
+        try {
+            if (project.type === 'monorepo') {
+                configManager.monorepo.createMonorepoProject(duplicatedProject);
+            } else {
+                configManager.addProject(duplicatedProject);
+            }
+            console.log(chalk.green(`✓ Project "${projectName}" duplicated as "${answers.newName}"`));
+        } catch (error) {
+            console.error(chalk.red('Error:', error.message));
+        }
+    });
+
+// Duplicate sub-deployment command
+program
+    .command('duplicate-sub <project-name> <sub-name>')
+    .description('Duplicate a sub-deployment within a monorepo')
+    .action(async (projectName, subName) => {
+        const project = configManager.getProject(projectName);
+        if (!project) {
+            console.log(chalk.red(`Project "${projectName}" not found`));
+            return;
+        }
+
+        if (!configManager.monorepo.isMonorepo(projectName)) {
+            console.log(chalk.red(`Project "${projectName}" is not a monorepo`));
+            return;
+        }
+
+        const subDeployments = configManager.monorepo.getSubDeployments(projectName);
+        const subDeployment = subDeployments.find(sub => sub.name === subName);
+        
+        if (!subDeployment) {
+            console.log(chalk.red(`Sub-deployment "${subName}" not found in "${projectName}"`));
+            return;
+        }
+
+        const answers = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'newName',
+                message: 'New sub-deployment name:',
+                validate: input => {
+                    if (input.length === 0) return 'Sub-deployment name is required';
+                    if (subDeployments.some(sub => sub.name.toLowerCase() === input.toLowerCase())) {
+                        return 'Sub-deployment with this name already exists';
+                    }
+                    return true;
+                }
+            },
+            {
+                type: 'confirm',
+                name: 'confirm',
+                message: `Duplicate "${subName}" as "${answers?.newName || '<new-name>'}"?`,
+                default: true
+            }
+        ]);
+
+        if (!answers.confirm) {
+            console.log(chalk.yellow('Duplication cancelled'));
+            return;
+        }
+
+        const duplicatedSub = {
+            ...subDeployment,
+            name: answers.newName,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        // Remove deployment history and stats for the copy
+        delete duplicatedSub.deploymentHistory;
+        delete duplicatedSub.stats;
+
+        try {
+            configManager.monorepo.addSubDeployment(projectName, duplicatedSub);
+            console.log(chalk.green(`✓ Sub-deployment "${subName}" duplicated as "${answers.newName}" in "${projectName}"`));
+        } catch (error) {
+            console.error(chalk.red('Error:', error.message));
+        }
+    });
+
+// Step reordering command
+program
+    .command('reorder-steps <project-name>')
+    .description('Reorder deployment steps for a project')
+    .option('-s, --sub <sub-name>', 'Reorder steps for a specific sub-deployment')
+    .action(async (projectName, options) => {
+        const project = configManager.getProject(projectName);
+        if (!project) {
+            console.log(chalk.red(`Project "${projectName}" not found`));
+            return;
+        }
+
+        let steps, isMonorepo = false, subDeployment = null;
+        
+        if (options.sub) {
+            if (!configManager.monorepo.isMonorepo(projectName)) {
+                console.log(chalk.red(`Project "${projectName}" is not a monorepo`));
+                return;
+            }
+            
+            const subDeployments = configManager.monorepo.getSubDeployments(projectName);
+            subDeployment = subDeployments.find(sub => sub.name === options.sub);
+            
+            if (!subDeployment) {
+                console.log(chalk.red(`Sub-deployment "${options.sub}" not found`));
+                return;
+            }
+            
+            isMonorepo = true;
+        }
+
+        const { stepType } = await inquirer.prompt([{
+            type: 'list',
+            name: 'stepType',
+            message: 'Which steps do you want to reorder?',
+            choices: [
+                { name: 'Local Steps', value: 'local' },
+                { name: 'Remote Steps', value: 'remote' }
+            ]
+        }]);
+
+        const stepsKey = stepType === 'local' ? 'localSteps' : 'deploymentSteps';
+        const targetObject = isMonorepo ? subDeployment : project;
+        steps = targetObject[stepsKey] || [];
+
+        if (steps.length === 0) {
+            console.log(chalk.yellow(`No ${stepType} steps found`));
+            return;
+        }
+
+        let modified = false;
+        while (true) {
+            console.log(chalk.blue(`\nCurrent ${stepType} steps:`));
+            steps.forEach((step, index) => {
+                console.log(`${index + 1}. ${step.name} - ${chalk.gray(step.command)}`);
+            });
+
+            const { action } = await inquirer.prompt([{
+                type: 'list',
+                name: 'action',
+                message: 'What would you like to do?',
+                choices: [
+                    { name: 'Move step up', value: 'up' },
+                    { name: 'Move step down', value: 'down' },
+                    { name: 'Save changes', value: 'save' },
+                    { name: 'Cancel without saving', value: 'cancel' }
+                ]
+            }]);
+
+            if (action === 'save') {
+                if (modified) {
+                    try {
+                        if (isMonorepo) {
+                            configManager.monorepo.updateSubDeployment(projectName, options.sub, subDeployment);
+                        } else {
+                            configManager.updateProject(project);
+                        }
+                        console.log(chalk.green('✓ Steps reordered successfully'));
+                    } catch (error) {
+                        console.error(chalk.red('Error saving changes:', error.message));
+                    }
+                } else {
+                    console.log(chalk.yellow('No changes made'));
+                }
+                break;
+            } else if (action === 'cancel') {
+                console.log(chalk.yellow('Changes discarded'));
+                break;
+            }
+
+            const { stepIndex } = await inquirer.prompt([{
+                type: 'list',
+                name: 'stepIndex',
+                message: `Which step do you want to move ${action}?`,
+                choices: steps.map((step, index) => ({
+                    name: `${index + 1}. ${step.name}`,
+                    value: index
+                }))
+            }]);
+
+            const newIndex = action === 'up' ? stepIndex - 1 : stepIndex + 1;
+            
+            if (newIndex >= 0 && newIndex < steps.length) {
+                [steps[stepIndex], steps[newIndex]] = [steps[newIndex], steps[stepIndex]];
+                modified = true;
+                console.log(chalk.green(`✓ Moved "${steps[newIndex].name}" ${action}`));
+            } else {
+                console.log(chalk.red(`Cannot move step ${action} - already at ${action === 'up' ? 'top' : 'bottom'}`));
+            }
         }
     });
 
