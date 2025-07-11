@@ -7,12 +7,14 @@ A secure local deployment automation tool that helps you deploy projects to remo
 - [GUI Documentation](GUI_DOCUMENTATION.md) - Comprehensive guide for the web interface
 - [API Documentation](API_DOCUMENTATION.md) - REST API reference
 - [CLI Reference](#cli-usage) - Command line interface guide
+- [Monorepo Guide](MONOREPO_GUIDE.md) - Deploy multiple projects from one repository
 
 ## Features
 
 - 🔐 Encrypted storage of SSH credentials and project configurations
 - 🚀 One-click deployment with automated git commit/push
 - 📦 Customizable deployment pipelines with local and remote steps
+- 🏗️ **Monorepo support** with sub-deployments and coordinated releases
 - 🎯 Support for multiple projects with directory-based configuration
 - 🔄 Automatic git operations (commit, push) before deployment
 - ⏱️ Deployment timing tracking for each step and total duration
@@ -78,6 +80,16 @@ This will prompt you for:
 - Remote project path
 - Deployment steps (optional)
 
+### Create a Monorepo Project
+
+```bash
+autodeploy create-monorepo      # Create monorepo project
+autodeploy add-sub <name>       # Add sub-deployment
+autodeploy list-sub <name>      # List sub-deployments
+```
+
+See [Monorepo Guide](MONOREPO_GUIDE.md) for detailed usage.
+
 ### List All Projects
 
 ```bash
@@ -92,6 +104,10 @@ autodeploy deploy
 
 # Deploy specific project
 autodeploy deploy my-project
+
+# Deploy monorepo sub-projects
+autodeploy deploy my-monorepo --all              # Deploy all
+autodeploy deploy my-monorepo --sub frontend     # Deploy specific
 ```
 
 This will:
