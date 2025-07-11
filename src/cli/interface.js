@@ -234,11 +234,345 @@ program
 
         console.log(chalk.blue('\nConfigured Projects:\n'));
         projects.forEach((project, index) => {
-            console.log(`${index + 1}. ${chalk.bold(project.name)}`);
+            const typeLabel = project.type === 'monorepo' ? chalk.cyan(' [MONOREPO]') : '';
+            console.log(`${index + 1}. ${chalk.bold(project.name)}${typeLabel}`);
             console.log(`   Local: ${project.localPath}`);
             console.log(`   Remote: ${project.ssh.username}@${project.ssh.host}:${project.remotePath}`);
-            console.log(`   Local Steps: ${project.localSteps?.length || 0}`);
-            console.log(`   Remote Steps: ${project.deploymentSteps.length}`);
+            
+            if (project.type === 'monorepo') {
+                const subDeployments = configManager.monorepo.getSubDeployments(project.name);
+                console.log(`   Sub-deployments: ${subDeployments.length}`);
+                if (subDeployments.length > 0) {
+                    subDeployments.forEach(sub => {
+                        console.log(`     - ${sub.name}: ${sub.remotePath}`);
+                    });
+                }
+            } else {
+                console.log(`   Local Steps: ${project.localSteps?.length || 0}`);
+                console.log(`   Remote Steps: ${project.deploymentSteps.length}`);
+            }
+            console.log();
+        });
+    });
+
+program
+    .command('create-monorepo')
+    .description('Create a new monorepo project')
+    .action(async () => {
+        const answers = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'name',
+                message: 'Monorepo project name:',
+                validate: input => input.length > 0 || 'Project name is required'
+            },
+            {
+                type: 'input',
+                name: 'localPath',
+                message: 'Local monorepo root path:',
+                validate: input => input.length > 0 || 'Local path is required'
+            },
+            {
+                type: 'input',
+                name: 'host',
+                message: 'SSH host:',
+                validate: input => input.length > 0 || 'Host is required'
+            },
+            {
+                type: 'input',
+                name: 'username',
+                message: 'SSH username:',
+                validate: input => input.length > 0 || 'Username is required'
+            },
+            {
+                type: 'password',
+                name: 'password',
+                message: 'SSH password:',
+                mask: '*',
+                validate: input => input.length > 0 || 'Password is required'
+            },
+            {
+                type: 'input',
+                name: 'port',
+                message: 'SSH port (default: 22):',
+                default: '22'
+            }
+        ]);
+
+        const project = {
+            name: answers.name,
+            type: 'monorepo',
+            localPath: answers.localPath,
+            ssh: {
+                host: answers.host,
+                username: answers.username,
+                password: answers.password,
+                port: parseInt(answers.port)
+            },
+            remotePath: '/var/www', // Base path for monorepo
+            deploymentSteps: [],
+            subDeployments: []
+        };
+
+        // Test SSH connection
+        console.log(chalk.blue('\nTesting SSH connection...'));
+        const testSpinner = ora('Connecting...').start();
+
+        const sshConnection = new SSHConnection(project.ssh);
+        try {
+            await sshConnection.connect();
+            await sshConnection.disconnect();
+            testSpinner.succeed('SSH connection successful');
+            
+            configManager.monorepo.createMonorepoProject(project);
+            console.log(chalk.green(`\n✓ Monorepo project "${project.name}" created successfully!`));
+            console.log(chalk.gray('Use "autodeploy add-sub <project-name>" to add sub-deployments'));
+        } catch (error) {
+            testSpinner.fail('SSH connection failed');
+            console.error(chalk.red('Error:', error.message));
+            
+            const { saveAnyway } = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'saveAnyway',
+                message: 'Save project anyway?',
+                default: false
+            }]);
+
+            if (saveAnyway) {
+                configManager.monorepo.createMonorepoProject(project);
+                console.log(chalk.yellow(`\n⚠ Monorepo "${project.name}" saved with connection issues`));
+            }
+        }
+    });
+
+program
+    .command('add-sub <project-name>')
+    .description('Add a sub-deployment to a monorepo')
+    .action(async (projectName) => {
+        const project = configManager.getProject(projectName);
+        if (!project) {
+            console.log(chalk.red(`Project "${projectName}" not found`));
+            return;
+        }
+
+        if (!configManager.monorepo.isMonorepo(projectName)) {
+            console.log(chalk.red(`Project "${projectName}" is not a monorepo`));
+            console.log(chalk.gray('Use "autodeploy create-monorepo" to create a monorepo project'));
+            return;
+        }
+
+        const answers = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'name',
+                message: 'Sub-deployment name (e.g., frontend, backend):',
+                validate: input => input.length > 0 || 'Name is required'
+            },
+            {
+                type: 'input',
+                name: 'relativePath',
+                message: 'Relative path from monorepo root (e.g., apps/frontend):',
+                validate: input => input.length > 0 || 'Path is required'
+            },
+            {
+                type: 'input',
+                name: 'remotePath',
+                message: 'Remote deployment path:',
+                validate: input => input.length > 0 || 'Remote path is required'
+            },
+            {
+                type: 'confirm',
+                name: 'inheritSSH',
+                message: 'Use same SSH credentials as parent project?',
+                default: true
+            }
+        ]);
+
+        const subConfig = {
+            name: answers.name,
+            relativePath: answers.relativePath,
+            remotePath: answers.remotePath
+        };
+
+        if (!answers.inheritSSH) {
+            const sshAnswers = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'host',
+                    message: 'SSH host:',
+                    default: project.ssh.host
+                },
+                {
+                    type: 'input',
+                    name: 'username',
+                    message: 'SSH username:',
+                    default: project.ssh.username
+                },
+                {
+                    type: 'password',
+                    name: 'password',
+                    message: 'SSH password:',
+                    mask: '*'
+                },
+                {
+                    type: 'input',
+                    name: 'port',
+                    message: 'SSH port:',
+                    default: project.ssh.port.toString()
+                }
+            ]);
+            
+            subConfig.ssh = {
+                host: sshAnswers.host,
+                username: sshAnswers.username,
+                password: sshAnswers.password,
+                port: parseInt(sshAnswers.port)
+            };
+        }
+
+        // Add deployment steps
+        const { addSteps } = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'addSteps',
+            message: 'Add deployment steps now?',
+            default: true
+        }]);
+
+        if (addSteps) {
+            // Local steps
+            const localSteps = [];
+            const { addLocalSteps } = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'addLocalSteps',
+                message: 'Add local steps?',
+                default: true
+            }]);
+
+            if (addLocalSteps) {
+                let addMore = true;
+                while (addMore) {
+                    const step = await inquirer.prompt([
+                        {
+                            type: 'input',
+                            name: 'name',
+                            message: 'Local step name:',
+                            validate: input => input.length > 0 || 'Step name is required'
+                        },
+                        {
+                            type: 'input',
+                            name: 'command',
+                            message: 'Command to run:',
+                            validate: input => input.length > 0 || 'Command is required'
+                        },
+                        {
+                            type: 'input',
+                            name: 'workingDir',
+                            message: 'Working directory (relative to sub-project):',
+                            default: '.'
+                        }
+                    ]);
+                    
+                    localSteps.push(step);
+                    
+                    const { more } = await inquirer.prompt([{
+                        type: 'confirm',
+                        name: 'more',
+                        message: 'Add another local step?',
+                        default: false
+                    }]);
+                    addMore = more;
+                }
+            }
+            subConfig.localSteps = localSteps;
+
+            // Remote steps
+            const remoteSteps = [];
+            const { addRemoteSteps } = await inquirer.prompt([{
+                type: 'confirm',
+                name: 'addRemoteSteps',
+                message: 'Add remote steps?',
+                default: true
+            }]);
+
+            if (addRemoteSteps) {
+                let addMore = true;
+                while (addMore) {
+                    const step = await inquirer.prompt([
+                        {
+                            type: 'input',
+                            name: 'name',
+                            message: 'Remote step name:',
+                            validate: input => input.length > 0 || 'Step name is required'
+                        },
+                        {
+                            type: 'input',
+                            name: 'command',
+                            message: 'Command to run:',
+                            validate: input => input.length > 0 || 'Command is required'
+                        },
+                        {
+                            type: 'input',
+                            name: 'workingDir',
+                            message: 'Working directory:',
+                            default: '.'
+                        }
+                    ]);
+                    
+                    remoteSteps.push(step);
+                    
+                    const { more } = await inquirer.prompt([{
+                        type: 'confirm',
+                        name: 'more',
+                        message: 'Add another remote step?',
+                        default: false
+                    }]);
+                    addMore = more;
+                }
+            }
+            subConfig.deploymentSteps = remoteSteps;
+        }
+
+        try {
+            configManager.monorepo.addSubDeployment(projectName, subConfig);
+            console.log(chalk.green(`\n✓ Sub-deployment "${subConfig.name}" added to "${projectName}"`));
+        } catch (error) {
+            console.error(chalk.red('Error:', error.message));
+        }
+    });
+
+program
+    .command('list-sub <project-name>')
+    .description('List sub-deployments of a monorepo')
+    .action((projectName) => {
+        const project = configManager.getProject(projectName);
+        if (!project) {
+            console.log(chalk.red(`Project "${projectName}" not found`));
+            return;
+        }
+
+        if (!configManager.monorepo.isMonorepo(projectName)) {
+            console.log(chalk.red(`Project "${projectName}" is not a monorepo`));
+            return;
+        }
+
+        const subDeployments = configManager.monorepo.getSubDeployments(projectName);
+        if (subDeployments.length === 0) {
+            console.log(chalk.yellow(`No sub-deployments configured for ${projectName}`));
+            console.log(chalk.gray('Use "autodeploy add-sub ' + projectName + '" to add sub-deployments'));
+            return;
+        }
+
+        console.log(chalk.blue(`\nSub-deployments for ${projectName}:\n`));
+        subDeployments.forEach((sub, index) => {
+            console.log(`${index + 1}. ${chalk.bold(sub.name)}`);
+            console.log(`   Local: ${sub.localPath}`);
+            console.log(`   Remote: ${sub.remotePath}`);
+            console.log(`   Local Steps: ${sub.localSteps?.length || 0}`);
+            console.log(`   Remote Steps: ${sub.deploymentSteps?.length || 0}`);
+            if (sub.stats && sub.stats.lastDeployment) {
+                console.log(`   Last Deployed: ${new Date(sub.stats.lastDeployment).toLocaleString()}`);
+                console.log(`   Status: ${sub.stats.lastDeploymentStatus || 'unknown'}`);
+            }
             console.log();
         });
     });
@@ -246,7 +580,9 @@ program
 program
     .command('deploy [project-name]')
     .description('Deploy a project')
-    .action(async (projectName) => {
+    .option('--sub <sub-name>', 'Deploy only a specific sub-deployment')
+    .option('--all', 'Deploy all sub-deployments in a monorepo')
+    .action(async (projectName, options) => {
         const projects = configManager.getAllProjects();
         
         if (projects.length === 0) {
@@ -267,13 +603,118 @@ program
                     type: 'list',
                     name: 'selectedProject',
                     message: 'Select project to deploy:',
-                    choices: projects.map(p => ({ name: p.name, value: p }))
+                    choices: projects.map(p => ({ 
+                        name: p.type === 'monorepo' ? `${p.name} (monorepo)` : p.name, 
+                        value: p 
+                    }))
                 }
             ]);
             project = selectedProject;
         }
 
+        // Handle monorepo deployments
+        if (project.type === 'monorepo') {
+            const subDeployments = configManager.monorepo.getSubDeployments(project.name);
+            
+            if (subDeployments.length === 0) {
+                console.log(chalk.yellow('No sub-deployments configured for this monorepo'));
+                console.log(chalk.gray('Use "autodeploy add-sub ' + project.name + '" to add sub-deployments'));
+                return;
+            }
+
+            let deploymentsToRun = [];
+
+            if (options.sub) {
+                // Deploy specific sub-deployment
+                const subDep = subDeployments.find(s => s.name === options.sub);
+                if (!subDep) {
+                    console.error(chalk.red(`Sub-deployment "${options.sub}" not found`));
+                    return;
+                }
+                deploymentsToRun = [subDep];
+            } else if (options.all) {
+                // Deploy all sub-deployments
+                deploymentsToRun = subDeployments;
+            } else {
+                // Ask user which sub-deployments to deploy
+                const { selectedSubs } = await inquirer.prompt([
+                    {
+                        type: 'checkbox',
+                        name: 'selectedSubs',
+                        message: 'Select sub-deployments to deploy:',
+                        choices: subDeployments.map(s => ({ name: s.name, value: s })),
+                        validate: input => input.length > 0 || 'Select at least one sub-deployment'
+                    }
+                ]);
+                deploymentsToRun = selectedSubs;
+            }
+
+            console.log(chalk.blue(`\n🚀 Deploying ${project.name} (${deploymentsToRun.length} sub-deployments)...\n`));
+
+            // Commit changes in monorepo root first
+            const git = new GitOperations(project.localPath);
+            const hasGit = await git.isGitRepository();
+            
+            if (hasGit) {
+                console.log(chalk.blue('📝 Committing monorepo changes...\n'));
+                const commitSpinner = ora('Checking for changes...').start();
+                
+                try {
+                    const hasChanges = await git.hasChanges();
+                    if (hasChanges) {
+                        commitSpinner.text = 'Committing and pushing changes...';
+                        await git.commitAndPush('Deployment commit');
+                        commitSpinner.succeed('Changes committed and pushed');
+                    } else {
+                        commitSpinner.succeed('No changes to commit');
+                    }
+                } catch (error) {
+                    if (error.message.includes('nothing to commit')) {
+                        commitSpinner.succeed('No changes to commit');
+                    } else {
+                        commitSpinner.fail('Failed to commit changes');
+                        console.error(chalk.red(error.message));
+                        
+                        const { continueAnyway } = await inquirer.prompt([{
+                            type: 'confirm',
+                            name: 'continueAnyway',
+                            message: 'Continue deployment anyway?',
+                            default: false
+                        }]);
+                        
+                        if (!continueAnyway) {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Deploy each sub-deployment
+            for (const subDep of deploymentsToRun) {
+                console.log(chalk.blue(`\n📦 Deploying ${subDep.name}...\n`));
+                
+                // Create a project object for the sub-deployment
+                const subProject = {
+                    ...subDep,
+                    name: `${project.name}/${subDep.name}`,
+                    localPath: subDep.localPath
+                };
+
+                // Deploy using existing logic
+                await deployProject(subProject, configManager);
+            }
+
+            console.log(chalk.green(`\n✓ Monorepo deployment completed!`));
+            return;
+        }
+
+        // Regular project deployment
         console.log(chalk.blue(`\n🚀 Deploying ${project.name}...\n`));
+        await deployProject(project, configManager);
+    });
+
+// Extract deployment logic into a separate function
+async function deployProject(project, configManager) {
 
         // Track deployment start
         const startTime = Date.now();
@@ -401,11 +842,25 @@ program
         
         // Record deployment
         const duration = Date.now() - startTime;
-        configManager.recordDeployment(project.name, deploymentSuccess, {
-            duration,
-            steps: deploymentSteps
-        });
-    });
+        
+        // Handle monorepo sub-deployment recording
+        if (project.parentProject) {
+            configManager.monorepo.recordSubDeployment(
+                project.parentProject,
+                project.name.split('/')[1], // Extract sub-deployment name
+                deploymentSuccess,
+                {
+                    duration,
+                    steps: deploymentSteps
+                }
+            );
+        } else {
+            configManager.recordDeployment(project.name, deploymentSuccess, {
+                duration,
+                steps: deploymentSteps
+            });
+        }
+}
 
 program
     .command('remove <project-name>')
