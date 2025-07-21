@@ -9,6 +9,7 @@ import { GitOperations } from '../git/operations.js';
 import { SSHConnection } from '../ssh/connection.js';
 import { PipelineExecutor } from '../pipeline/executor.js';
 import { PersistentPipelineExecutor } from '../pipeline/executor-persistent.js';
+import { NestedSSHExecutor } from '../pipeline/executor-nested-ssh.js';
 import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -343,16 +344,61 @@ export function createAPIServer(port = 3000) {
                     if (subDeployment.deploymentSteps && subDeployment.deploymentSteps.length > 0) {
                         const sshConfig = subDeployment.ssh || project.ssh;
                         
+                        // Check if we need special handling for nested SSH
+                        const hasNestedSSH = subDeployment.deploymentSteps.some(step => 
+                            step.command.trim().match(/^ssh\s+[^\s]+\s*$/)
+                        );
+                        
                         // Check if persistent sessions are enabled
                         const usePersistentSession = subDeployment.persistentSession || project.persistentSession;
                         
-                        if (usePersistentSession) {
+                        console.log(`[DEBUG] Sub-deployment ${subDeployment.name} - persistentSession: ${subDeployment.persistentSession}`);
+                        console.log(`[DEBUG] Project ${project.name} - persistentSession: ${project.persistentSession}`);
+                        console.log(`[DEBUG] Has nested SSH: ${hasNestedSSH}`);
+                        console.log(`[DEBUG] Using persistent session: ${usePersistentSession}`);
+                        
+                        if (hasNestedSSH) {
+                            // Use nested SSH executor for proper handling
+                            const nestedExecutor = new NestedSSHExecutor(sshConfig, subDeployment.remotePath);
+                            
+                            res.write(`data: ${JSON.stringify({ 
+                                type: 'info', 
+                                message: `[${subDeployment.name}] Detected nested SSH commands, using optimized execution` 
+                            })}\n\n`);
+                            
+                            try {
+                                const results = await nestedExecutor.executeSteps(subDeployment.deploymentSteps);
+                                
+                                results.forEach((result) => {
+                                    deploymentSteps.push({
+                                        name: `[${subDeployment.name}] ${result.step}`,
+                                        success: result.success,
+                                        output: result.output || result.error,
+                                        duration: 0
+                                    });
+                                    
+                                    res.write(`data: ${JSON.stringify({ 
+                                        type: result.success ? 'step-complete' : 'step-error', 
+                                        message: result.output || result.error,
+                                        step: `${subDeployment.name}/${result.step}`
+                                    })}\n\n`);
+                                    
+                                    if (!result.success) {
+                                        deploymentSuccess = false;
+                                        throw new Error(`Step failed: ${subDeployment.name}/${result.step}`);
+                                    }
+                                });
+                            } catch (error) {
+                                deploymentSuccess = false;
+                                throw error;
+                            }
+                        } else if (usePersistentSession) {
                             // Use persistent executor for all steps in one session
                             const persistentExecutor = new PersistentPipelineExecutor(sshConfig, subDeployment.remotePath);
                             
                             res.write(`data: ${JSON.stringify({ 
                                 type: 'info', 
-                                message: `[${subDeployment.name}] Using persistent SSH session` 
+                                message: `[${subDeployment.name}] Using persistent SSH session for ${subDeployment.deploymentSteps.length} steps` 
                             })}\n\n`);
                             
                             try {

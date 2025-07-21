@@ -16,24 +16,52 @@ export class PersistentPipelineExecutor {
         const results = [];
         
         try {
+            console.log(chalk.blue('[PERSISTENT] Connecting to SSH...'));
             await connection.connect();
+            console.log(chalk.green('[PERSISTENT] SSH connection established'));
             
             // Build a single script that executes all steps
             const script = this.buildSessionScript(steps);
             
-            console.log(chalk.gray('[DEBUG] Executing steps in single SSH session'));
+            // Log the script in debug mode
+            if (process.env.AUTODEPLOY_DEBUG === 'true') {
+                console.log(chalk.yellow('[PERSISTENT] Generated script:'));
+                console.log(chalk.gray('--- SCRIPT START ---'));
+                console.log(chalk.gray(script));
+                console.log(chalk.gray('--- SCRIPT END ---'));
+            }
+            
+            console.log(chalk.blue('[PERSISTENT] Executing combined script with', steps.length, 'steps'));
             
             // Execute the entire script in one go
+            const startTime = Date.now();
             const result = await connection.exec(script);
+            const duration = Date.now() - startTime;
+            
+            console.log(chalk.blue('[PERSISTENT] Script execution completed in', duration, 'ms'));
+            console.log(chalk.blue('[PERSISTENT] Exit code:', result.code));
+            
+            if (process.env.AUTODEPLOY_DEBUG === 'true') {
+                console.log(chalk.yellow('[PERSISTENT] Raw output:'));
+                console.log(chalk.gray('--- OUTPUT START ---'));
+                console.log(chalk.gray(result.stdout));
+                console.log(chalk.gray('--- OUTPUT END ---'));
+                if (result.stderr) {
+                    console.log(chalk.red('[PERSISTENT] Stderr:'));
+                    console.log(chalk.gray(result.stderr));
+                }
+            }
             
             // Parse the results from the output
             const parsedResults = this.parseScriptOutput(result.stdout, steps);
             
+            console.log(chalk.green('[PERSISTENT] Disconnecting SSH'));
             connection.disconnect();
             
             return parsedResults;
             
         } catch (error) {
+            console.error(chalk.red('[PERSISTENT] Error:', error.message));
             connection.disconnect();
             throw error;
         }
@@ -74,6 +102,7 @@ export class PersistentPipelineExecutor {
         steps.forEach((step, index) => {
             lines.push(`# Step ${index + 1}: ${step.name}`);
             lines.push(`echo "STEP_START:${index}:${step.name}"`);
+            lines.push(`echo "[PERSISTENT] Executing: ${step.command}"`);
             
             // Handle environment variables
             if (step.envVars && step.envVars.length > 0) {
@@ -92,9 +121,22 @@ export class PersistentPipelineExecutor {
                 lines.push('set +e  # Allow errors for this step');
             }
             
-            // Add the command
-            lines.push(`${step.command}`);
+            // Add the command with echo for debugging
+            lines.push(`echo "[PERSISTENT] Current directory: $(pwd)"`);
+            lines.push(`echo "[PERSISTENT] Running command: ${step.command}"`);
+            
+            // Check if this is an SSH command that might need special handling
+            if (step.command.trim().startsWith('ssh ')) {
+                // SSH commands might hang waiting for input, add timeout and non-interactive flags
+                const sshCommand = step.command.replace(/^ssh\s+/, 'ssh -o BatchMode=yes -o ConnectTimeout=10 ');
+                lines.push(`echo "[PERSISTENT] Modified SSH command: ${sshCommand}"`);
+                lines.push(`${sshCommand}`);
+            } else {
+                lines.push(`${step.command}`);
+            }
+            
             lines.push('STEP_EXIT_CODE=$?');
+            lines.push(`echo "[PERSISTENT] Command exit code: $STEP_EXIT_CODE"`);
             
             // Record the result
             lines.push(`record_step "${step.name}" $STEP_EXIT_CODE`);
