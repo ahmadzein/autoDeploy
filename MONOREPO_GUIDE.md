@@ -10,6 +10,9 @@ Monorepo support enables:
 - Coordinated deployments across sub-projects
 - Shared SSH credentials with optional overrides
 - Automatic git commits at the monorepo root before deployments
+- Individual deployment history for each sub-project
+- Main project deployment tracking with aggregated statistics
+- Separate logs and configuration files for better organization
 
 ## Quick Start
 
@@ -75,20 +78,24 @@ Options:
 
 ## Configuration Structure
 
-Monorepo projects are stored with this structure:
+Monorepo projects are stored with this enhanced structure:
 ```
 ~/.autodeploy/projects/
   my-monorepo/
     config.json           # Main monorepo config
+    history.json          # Main project deployment history (NEW)
+    logs.json            # Aggregated deployment logs (NEW)
+    stats.json           # Overall deployment statistics (NEW)
     sub-deployments/      # Sub-project configurations
       frontend/
-        config.json       # Frontend config
-        local-steps.json  # Frontend local steps
-        remote-steps.json # Frontend remote steps
+        config.json       # Frontend config & SSH settings
+        local-steps.json  # Frontend local build/test steps
+        remote-steps.json # Frontend remote deployment steps
         history.json      # Frontend deployment history
-        stats.json        # Frontend statistics
+        logs.json        # Frontend deployment logs (NEW)
+        stats.json        # Frontend deployment statistics
       backend/
-        config.json       # Backend config
+        config.json       # Backend config & SSH settings
         ...
 ```
 
@@ -283,6 +290,123 @@ Deployment History for myapp/frontend:
 1. 2 minutes ago - Success (45s)
 2. 1 hour ago - Success (52s)
 3. Yesterday - Failed (12s)
+```
+
+## New Features (2025)
+
+### Enhanced Deployment Tracking
+- **Main project history**: Tracks overall monorepo deployments
+- **Sub-project history**: Individual deployment history for each sub-project
+- **Deployment logs**: Detailed step outputs stored in separate logs.json files
+- **Statistics**: Deployment counts, success rates, and timing metrics
+
+### SSH Key Authentication
+- **Full SSH key support**: PEM files, OpenSSH keys, Ed25519
+- **Passphrase protection**: Encrypted private keys supported
+- **Inheritance model**: Sub-projects can inherit or override SSH settings
+- **Port forwarding**: Database and service tunnels during deployment
+
+### CLI Enhancements
+```bash
+# View monorepo statistics
+autodeploy stats
+
+# Detailed deployment history
+autodeploy history my-monorepo --verbose
+
+# Edit specific sub-deployment
+autodeploy edit-sub my-monorepo frontend
+
+# Duplicate sub-deployment
+autodeploy duplicate-sub my-monorepo frontend
+
+# JSON editing mode
+autodeploy edit my-monorepo --json
+```
+
+### Deployment Process Improvements
+1. **Automatic Git operations**: Commits at monorepo root before deployment
+2. **Parallel sub-deployments**: Deploy multiple sub-projects simultaneously
+3. **Error handling**: Continue deployment of other sub-projects on failure
+4. **Real-time logging**: See deployment progress as it happens
+
+## Advanced Examples
+
+### Example 1: Microservices Architecture
+```bash
+# Create monorepo for microservices
+autodeploy create-monorepo
+? Monorepo name: microservices-platform
+? Local repository path: /Users/me/platform
+? SSH host: k8s-master.example.com
+? SSH authentication method: Private Key (PEM file)
+? Path to private key file: /Users/me/.ssh/k8s-deploy.pem
+
+# Add services
+autodeploy add-sub microservices-platform
+? Sub-deployment name: auth-service
+? Relative path: services/auth
+? Remote path: /opt/services/auth
+
+autodeploy add-sub microservices-platform
+? Sub-deployment name: user-service
+? Relative path: services/user
+? Remote path: /opt/services/user
+
+# Deploy all services
+autodeploy deploy microservices-platform --all
+```
+
+### Example 2: Multi-Environment Monorepo
+```bash
+# Different SSH credentials per environment
+autodeploy add-sub production-app
+? Sub-deployment name: frontend-prod
+? Use same SSH credentials as parent monorepo? No
+? SSH host: prod-frontend.example.com
+? SSH authentication method: Private Key (PEM file)
+? Path to private key file: /Users/me/.ssh/prod-key.pem
+
+autodeploy add-sub production-app
+? Sub-deployment name: frontend-staging
+? Use same SSH credentials as parent monorepo? No
+? SSH host: staging-frontend.example.com
+? SSH authentication method: Private Key (PEM file)
+? Path to private key file: /Users/me/.ssh/staging-key.pem
+```
+
+### Example 3: Complex Deployment Steps
+```bash
+# Local steps for building shared dependencies
+Local Steps:
+- name: "Install Root Dependencies"
+  command: "npm install"
+  workingDir: "."
+  
+- name: "Build Shared Libraries"
+  command: "npm run build:shared"
+  workingDir: "packages/shared"
+  
+- name: "Run All Tests"
+  command: "npm test"
+  workingDir: "."
+  continueOnError: false
+
+# Remote steps for sub-project
+Remote Steps:
+- name: "Pull Latest Code"
+  command: "git pull origin main"
+  
+- name: "Install Dependencies"
+  command: "npm ci --production"
+  workingDir: "apps/backend"
+  
+- name: "Run Migrations"
+  command: "npm run migrate:prod"
+  workingDir: "apps/backend"
+  
+- name: "Restart Service"
+  command: "pm2 restart backend"
 ```
 
 ## Troubleshooting

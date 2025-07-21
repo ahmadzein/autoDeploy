@@ -86,9 +86,11 @@ function DeploymentView() {
     try {
       const response = await fetch(`/api/projects/${projectName}/deployments`);
       const history = await response.json();
-      setDeploymentHistory(history);
+      // Ensure deploymentHistory is always an array
+      setDeploymentHistory(Array.isArray(history) ? history : []);
     } catch (err) {
       console.error('Error fetching deployment history:', err);
+      setDeploymentHistory([]); // Ensure deploymentHistory is an empty array on error
     }
   };
 
@@ -312,7 +314,7 @@ function DeploymentView() {
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">
-              Deploy {project.name}
+              Deploy {project.displayName || project.name}
               {project.type === 'monorepo' && (
                 <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
                   <FolderTree className="h-4 w-4 mr-1" />

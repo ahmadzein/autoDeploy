@@ -19,9 +19,11 @@ function ProjectList() {
     try {
       setLoading(true);
       const data = await projectAPI.getAll();
-      setProjects(data);
+      // Ensure projects is always an array
+      setProjects(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching projects:', err);
+      setProjects([]); // Ensure projects is an empty array on error
     } finally {
       setLoading(false);
     }
@@ -41,7 +43,7 @@ function ProjectList() {
 
   const handleDuplicateStart = (project) => {
     setDuplicateProject(project);
-    setNewProjectName(`${project.name}-copy`);
+    setNewProjectName(`${project.displayName || project.name}-copy`);
     setDuplicating(true);
   };
 
@@ -168,10 +170,10 @@ function ProjectList() {
                         to={`/projects/${project.name}/sub-deployments`}
                         className="hover:text-purple-700"
                       >
-                        {project.name}
+                        {project.displayName || project.name}
                       </Link>
                     ) : (
-                      project.name
+                      project.displayName || project.name
                     )}
                   </h3>
                   {project.type === 'monorepo' && (

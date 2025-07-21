@@ -50,7 +50,7 @@ export const projectAPI = {
 
   // Get single project
   getOne: async (projectName) => {
-    const response = await api.get(`/projects/${projectName}`);
+    const response = await api.get(`/projects/${encodeURIComponent(projectName)}`);
     return response.data;
   },
 
@@ -62,13 +62,13 @@ export const projectAPI = {
 
   // Update project
   update: async (projectName, projectData) => {
-    const response = await api.put(`/projects/${projectName}`, projectData);
+    const response = await api.put(`/projects/${encodeURIComponent(projectName)}`, projectData);
     return response.data;
   },
 
   // Delete project
   delete: async (projectName) => {
-    const response = await api.delete(`/projects/${projectName}`);
+    const response = await api.delete(`/projects/${encodeURIComponent(projectName)}`);
     return response.data;
   },
 
@@ -80,25 +80,25 @@ export const projectAPI = {
 
   // Get sub-deployments for monorepo
   getSubDeployments: async (projectName) => {
-    const response = await api.get(`/projects/${projectName}/sub-deployments`);
+    const response = await api.get(`/projects/${encodeURIComponent(projectName)}/sub-deployments`);
     return response.data;
   },
 
   // Add sub-deployment to monorepo
   addSubDeployment: async (projectName, subData) => {
-    const response = await api.post(`/projects/${projectName}/sub-deployments`, subData);
+    const response = await api.post(`/projects/${encodeURIComponent(projectName)}/sub-deployments`, subData);
     return response.data;
   },
 
   // Update sub-deployment
   updateSubDeployment: async (projectName, subName, subData) => {
-    const response = await api.put(`/projects/${projectName}/sub-deployments/${subName}`, subData);
+    const response = await api.put(`/projects/${encodeURIComponent(projectName)}/sub-deployments/${encodeURIComponent(subName)}`, subData);
     return response.data;
   },
 
   // Delete sub-deployment
   deleteSubDeployment: async (projectName, subName) => {
-    const response = await api.delete(`/projects/${projectName}/sub-deployments/${subName}`);
+    const response = await api.delete(`/projects/${encodeURIComponent(projectName)}/sub-deployments/${encodeURIComponent(subName)}`);
     return response.data;
   },
 };
@@ -107,13 +107,13 @@ export const projectAPI = {
 export const deploymentAPI = {
   // Deploy project
   deploy: async (projectName, options = {}) => {
-    const response = await api.post(`/deployments/${projectName}`, options);
+    const response = await api.post(`/deployments/${encodeURIComponent(projectName)}`, options);
     return response.data;
   },
 
   // Get deployment status
   getStatus: async (projectName, deploymentId) => {
-    const response = await api.get(`/deployments/${projectName}/${deploymentId}`);
+    const response = await api.get(`/deployments/${encodeURIComponent(projectName)}/${deploymentId}`);
     return response.data;
   },
 
@@ -165,7 +165,7 @@ export const pipelineAPI = {
 
   // Get pipeline info
   getInfo: async (projectName) => {
-    const response = await api.get(`/pipelines/${projectName}`);
+    const response = await api.get(`/pipelines/${encodeURIComponent(projectName)}`);
     return response.data;
   },
 };

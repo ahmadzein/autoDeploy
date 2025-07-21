@@ -20,12 +20,14 @@ function Dashboard() {
         projectAPI.getAll(),
         systemAPI.getStats()
       ]);
-      setProjects(projectsData);
+      // Ensure projects is always an array
+      setProjects(Array.isArray(projectsData) ? projectsData : []);
       setStats(statsData);
       setError(null);
     } catch (err) {
       setError('Failed to load data. Make sure the API server is running.');
       console.error('Error fetching data:', err);
+      setProjects([]); // Ensure projects is an empty array on error
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,16 @@
 
 The AutoDeploy API provides a RESTful interface for managing deployment projects and executing deployments. It runs as an Express.js server with CORS support and real-time streaming capabilities.
 
+## New Features (2025)
+
+- **SSH Key Authentication**: Support for private key authentication with passphrases
+- **Port Forwarding**: SSH tunnel configuration for database access
+- **Deployment History**: Detailed history tracking with separate logs storage
+- **Statistics Endpoint**: Global deployment metrics and analytics
+- **Enhanced Error Handling**: Graceful handling of "nothing to commit" scenarios
+- **Monorepo Support**: Full API support for monorepo deployments
+- **File-based Configuration**: Organized storage with separate JSON files
+
 ## Base URL
 
 ```
@@ -56,7 +66,10 @@ GET /api/projects
     "ssh": {
       "host": "server.example.com",
       "username": "deploy",
-      "port": 22
+      "port": 22,
+      "password": "encrypted", // Only shown if using password auth
+      "privateKeyPath": "/path/to/key.pem", // Only shown if using key auth
+      "passphrase": "encrypted" // Only shown if key has passphrase
     },
     "remotePath": "/var/www/my-project",
     "localSteps": [
@@ -122,6 +135,8 @@ POST /api/projects
 ```
 
 **Request Body**
+
+Option 1: Password Authentication
 ```json
 {
   "name": "new-project",
@@ -133,22 +148,50 @@ POST /api/projects
     "port": 22
   },
   "remotePath": "/var/www/new-project",
-  "localSteps": [
-    {
-      "name": "Run Tests",
-      "command": "npm test",
-      "workingDir": ".",
-      "continueOnError": false
+  "localSteps": [],
+  "deploymentSteps": []
+}
+```
+
+Option 2: Private Key Authentication
+```json
+{
+  "name": "new-project",
+  "localPath": "/home/user/projects/new-project",
+  "ssh": {
+    "host": "server.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/john/.ssh/deploy-key.pem",
+    "passphrase": "optional-key-passphrase", // Optional, omit if no passphrase
+    "port": 22
+  },
+  "remotePath": "/var/www/new-project",
+  "localSteps": [],
+  "deploymentSteps": []
+}
+```
+
+Option 3: Private Key with SSH Options
+```json
+{
+  "name": "new-project",
+  "localPath": "/home/user/projects/new-project",
+  "ssh": {
+    "host": "server.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/john/.ssh/deploy-key.pem",
+    "port": 22,
+    "sshOptions": {
+      "localPortForwarding": [{
+        "localPort": 5433,
+        "remoteHost": "database.internal",
+        "remotePort": 5432
+      }]
     }
-  ],
-  "deploymentSteps": [
-    {
-      "name": "Install Dependencies",
-      "command": "npm install",
-      "workingDir": ".",
-      "continueOnError": false
-    }
-  ]
+  },
+  "remotePath": "/var/www/new-project",
+  "localSteps": [],
+  "deploymentSteps": []
 }
 ```
 
@@ -341,11 +384,24 @@ POST /api/test-connection
 ```
 
 **Request Body**
+
+Option 1: Password Authentication
 ```json
 {
   "host": "server.example.com",
   "username": "deploy",
   "password": "secret",
+  "port": 22
+}
+```
+
+Option 2: Private Key Authentication
+```json
+{
+  "host": "server.example.com",
+  "username": "deploy",
+  "privateKeyPath": "/Users/john/.ssh/deploy-key.pem",
+  "passphrase": "optional-passphrase",
   "port": 22
 }
 ```
@@ -363,6 +419,78 @@ POST /api/test-connection
 {
   "success": false,
   "message": "Authentication failed"
+}
+```
+
+---
+
+### Statistics
+
+#### Get Global Deployment Statistics
+```http
+GET /api/stats
+```
+
+**Response**
+```json
+{
+  "totalDeployments": 156,
+  "deploymentsToday": 12,
+  "activeProjects": 8,
+  "lastDeployment": {
+    "timestamp": "2025-01-12T10:30:00Z",
+    "projectName": "my-project",
+    "success": true
+  }
+}
+```
+
+---
+
+## SSH Configuration
+
+### Password Authentication
+```json
+{
+  "ssh": {
+    "host": "server.example.com",
+    "username": "deploy",
+    "password": "your-password",
+    "port": 22
+  }
+}
+```
+
+### Private Key Authentication
+```json
+{
+  "ssh": {
+    "host": "server.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/me/.ssh/deploy-key.pem",
+    "passphrase": "key-passphrase",
+    "port": 22,
+    "sshOptions": {
+      "ServerAliveInterval": 60,
+      "ServerAliveCountMax": 3
+    }
+  }
+}
+```
+
+### Port Forwarding
+```json
+{
+  "ssh": {
+    "host": "bastion.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/me/.ssh/bastion-key.pem",
+    "port": 22,
+    "forwardRules": [
+      "5433:database.internal:5432",
+      "6380:redis.internal:6379"
+    ]
+  }
 }
 ```
 
@@ -443,6 +571,111 @@ cors: {
 ```
 
 ---
+
+## Example Configurations
+
+### Node.js Project with PM2
+```json
+{
+  "name": "node-api",
+  "localPath": "/Users/me/projects/api",
+  "remotePath": "/var/www/api",
+  "ssh": {
+    "host": "api.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/me/.ssh/deploy.pem",
+    "port": 22
+  },
+  "localSteps": [
+    {
+      "name": "Install Dependencies",
+      "command": "npm install",
+      "workingDir": ".",
+      "continueOnError": false
+    },
+    {
+      "name": "Run Tests",
+      "command": "npm test",
+      "workingDir": ".",
+      "continueOnError": false
+    }
+  ],
+  "deploymentSteps": [
+    {
+      "name": "Pull Latest Code",
+      "command": "git pull origin main",
+      "workingDir": ".",
+      "continueOnError": false
+    },
+    {
+      "name": "Install Production Dependencies",
+      "command": "npm ci --production",
+      "workingDir": ".",
+      "continueOnError": false
+    },
+    {
+      "name": "Restart Application",
+      "command": "pm2 restart ecosystem.config.js",
+      "workingDir": ".",
+      "continueOnError": false
+    }
+  ]
+}
+```
+
+### Python Django Project
+```json
+{
+  "name": "django-app",
+  "localPath": "/Users/me/projects/django-app",
+  "remotePath": "/home/deploy/django-app",
+  "ssh": {
+    "host": "django.example.com",
+    "username": "deploy",
+    "password": "encrypted-password",
+    "port": 22
+  },
+  "localSteps": [
+    {
+      "name": "Create Virtual Environment",
+      "command": "python -m venv venv",
+      "workingDir": "."
+    },
+    {
+      "name": "Run Tests",
+      "command": "./venv/bin/python manage.py test",
+      "workingDir": "."
+    }
+  ],
+  "deploymentSteps": [
+    {
+      "name": "Pull Latest Code",
+      "command": "git pull origin main",
+      "workingDir": "."
+    },
+    {
+      "name": "Install Dependencies",
+      "command": "pip install -r requirements.txt",
+      "workingDir": "."
+    },
+    {
+      "name": "Run Migrations",
+      "command": "python manage.py migrate",
+      "workingDir": "."
+    },
+    {
+      "name": "Collect Static Files",
+      "command": "python manage.py collectstatic --noinput",
+      "workingDir": "."
+    },
+    {
+      "name": "Restart Gunicorn",
+      "command": "sudo supervisorctl restart gunicorn",
+      "workingDir": "."
+    }
+  ]
+}
+```
 
 ## Examples
 

@@ -8,6 +8,7 @@ import { ConfigManager } from '../config/manager.js';
 import { GitOperations } from '../git/operations.js';
 import { SSHConnection } from '../ssh/connection.js';
 import { PipelineExecutor } from '../pipeline/executor.js';
+import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,22 +29,49 @@ export function createAPIServer(port = 3000) {
     // Get all projects
     app.get('/api/projects', (req, res) => {
         const projects = configManager.getAllProjects();
-        res.json(projects);
+        // Ensure all projects have displayName for backward compatibility
+        const projectsWithDisplayNames = projects.map(p => ({
+            ...p,
+            displayName: p.displayName || p.name
+        }));
+        res.json(projectsWithDisplayNames);
     });
 
     // Get single project
     app.get('/api/projects/:name', (req, res) => {
-        const project = configManager.getProject(req.params.name);
+        const projectName = decodeURIComponent(req.params.name);
+        const project = configManager.getProject(projectName);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
-        res.json(project);
+        // Ensure project has displayName for backward compatibility
+        const projectWithDisplayName = {
+            ...project,
+            displayName: project.displayName || project.name
+        };
+        res.json(projectWithDisplayName);
     });
 
     // Add project
     app.post('/api/projects', async (req, res) => {
         try {
             const project = req.body;
+            
+            // Validate project name
+            if (!project.name || project.name.trim() === '') {
+                return res.status(400).json({ error: 'Project name is required' });
+            }
+            
+            // Generate slug from project name
+            const baseSlug = createSlug(project.name);
+            const existingProjects = configManager.getAllProjects();
+            const existingSlugs = existingProjects.map(p => p.slug || p.name);
+            const slug = ensureUniqueSlug(baseSlug, existingSlugs);
+            
+            // Store both display name and slug
+            project.displayName = project.name;
+            project.slug = slug;
+            project.name = slug; // Use slug as the internal identifier
             
             // Test SSH connection
             const sshConnection = new SSHConnection(project.ssh);
@@ -66,7 +94,8 @@ export function createAPIServer(port = 3000) {
     // Update project
     app.put('/api/projects/:name', (req, res) => {
         try {
-            configManager.updateProject(req.params.name, req.body);
+            const projectName = decodeURIComponent(req.params.name);
+            configManager.updateProject(projectName, req.body);
             res.json({ success: true });
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -76,7 +105,8 @@ export function createAPIServer(port = 3000) {
     // Delete project
     app.delete('/api/projects/:name', (req, res) => {
         try {
-            configManager.removeProject(req.params.name);
+            const projectName = decodeURIComponent(req.params.name);
+            configManager.removeProject(projectName);
             res.json({ success: true });
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -96,7 +126,8 @@ export function createAPIServer(port = 3000) {
 
     // Deploy project (SSE endpoint for EventSource)
     app.get('/api/deployments/:name', async (req, res) => {
-        const project = configManager.getProject(req.params.name);
+        const projectName = decodeURIComponent(req.params.name);
+        const project = configManager.getProject(projectName);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -105,7 +136,7 @@ export function createAPIServer(port = 3000) {
         let deploymentTargets = [];
         if (project.type === 'monorepo') {
             const monorepoConfig = configManager.getMonorepoConfig();
-            const allSubs = monorepoConfig.getSubDeployments(req.params.name);
+            const allSubs = monorepoConfig.getSubDeployments(projectName);
             
             if (req.query.all === 'true') {
                 // Deploy all sub-deployments
@@ -355,6 +386,17 @@ export function createAPIServer(port = 3000) {
                     message: `Successfully deployed ${deploymentTargets.length} sub-project(s)!` 
                 })}\n\n`);
                 
+                // Record main monorepo deployment
+                const duration = Date.now() - startTime;
+                configManager.recordDeployment(project.name, deploymentSuccess, {
+                    duration,
+                    steps: deploymentSteps,
+                    subDeployments: deploymentTargets.map(name => ({ name, success: true }))
+                });
+                
+                // Send a final close event
+                res.write(`event: close\ndata: {}\n\n`);
+                
             } else {
                 // Standard project deployment (original logic)
                 // Execute local steps first
@@ -594,7 +636,8 @@ export function createAPIServer(port = 3000) {
 
     // Get deployment history for a project
     app.get('/api/projects/:name/deployments', (req, res) => {
-        const history = configManager.getDeploymentHistory(req.params.name);
+        const projectName = decodeURIComponent(req.params.name);
+        const history = configManager.getDeploymentHistory(projectName);
         res.json(history);
     });
 
@@ -608,7 +651,8 @@ export function createAPIServer(port = 3000) {
     
     // Get sub-deployments for a monorepo
     app.get('/api/projects/:name/sub-deployments', (req, res) => {
-        const project = configManager.getProject(req.params.name);
+        const projectName = decodeURIComponent(req.params.name);
+        const project = configManager.getProject(projectName);
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
@@ -617,14 +661,15 @@ export function createAPIServer(port = 3000) {
         }
         
         const monorepoConfig = configManager.getMonorepoConfig();
-        const subDeployments = monorepoConfig.getSubDeployments(req.params.name);
+        const subDeployments = monorepoConfig.getSubDeployments(projectName);
         res.json(subDeployments);
     });
     
     // Add sub-deployment to monorepo
     app.post('/api/projects/:name/sub-deployments', async (req, res) => {
         try {
-            const project = configManager.getProject(req.params.name);
+            const projectName = decodeURIComponent(req.params.name);
+            const project = configManager.getProject(projectName);
             if (!project) {
                 return res.status(404).json({ error: 'Project not found' });
             }
@@ -648,7 +693,7 @@ export function createAPIServer(port = 3000) {
             }
             
             const monorepoConfig = configManager.getMonorepoConfig();
-            monorepoConfig.addSubDeployment(req.params.name, subData);
+            monorepoConfig.addSubDeployment(projectName, subData);
             res.status(201).json({ success: true });
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -658,7 +703,9 @@ export function createAPIServer(port = 3000) {
     // Update sub-deployment
     app.put('/api/projects/:name/sub-deployments/:subName', (req, res) => {
         try {
-            const project = configManager.getProject(req.params.name);
+            const projectName = decodeURIComponent(req.params.name);
+            const subName = decodeURIComponent(req.params.subName);
+            const project = configManager.getProject(projectName);
             if (!project) {
                 return res.status(404).json({ error: 'Project not found' });
             }
@@ -667,7 +714,7 @@ export function createAPIServer(port = 3000) {
             }
             
             const monorepoConfig = configManager.getMonorepoConfig();
-            monorepoConfig.updateSubDeployment(req.params.name, req.params.subName, req.body);
+            monorepoConfig.updateSubDeployment(projectName, subName, req.body);
             res.json({ success: true });
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -677,7 +724,9 @@ export function createAPIServer(port = 3000) {
     // Delete sub-deployment
     app.delete('/api/projects/:name/sub-deployments/:subName', (req, res) => {
         try {
-            const project = configManager.getProject(req.params.name);
+            const projectName = decodeURIComponent(req.params.name);
+            const subName = decodeURIComponent(req.params.subName);
+            const project = configManager.getProject(projectName);
             if (!project) {
                 return res.status(404).json({ error: 'Project not found' });
             }
@@ -686,7 +735,7 @@ export function createAPIServer(port = 3000) {
             }
             
             const monorepoConfig = configManager.getMonorepoConfig();
-            monorepoConfig.deleteSubDeployment(req.params.name, req.params.subName);
+            monorepoConfig.deleteSubDeployment(projectName, subName);
             res.json({ success: true });
         } catch (error) {
             res.status(500).json({ error: error.message });

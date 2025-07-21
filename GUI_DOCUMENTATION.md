@@ -18,15 +18,19 @@ AutoDeploy GUI is a modern web-based interface for managing deployment configura
 
 ### Key Features
 - **Project Management**: Create, edit, and delete deployment projects
+- **SSH Key Authentication**: Support for PEM files and OpenSSH keys with passphrases
+- **Port Forwarding**: Configure SSH tunnels for database access
 - **Monorepo Support**: Manage multiple sub-deployments within a single repository
 - **Interactive Commands**: Configure auto-fill responses for interactive deployment steps
 - **Project Duplication**: Clone existing projects and sub-deployments with new names
 - **Step Reordering**: Drag-and-drop reordering of deployment steps
+- **JSON Editor Mode**: Direct configuration editing with file-specific views
 - **Real-time Deployment**: Live deployment status with terminal-style output
-- **Deployment History**: Track all deployments with detailed logs
+- **Deployment History**: Track all deployments with detailed logs and timing
 - **Statistics Dashboard**: Monitor deployment metrics and success rates
+- **Integrated Documentation**: Built-in docs viewer with 9 sections
 - **Responsive Design**: Works on desktop and mobile devices
-- **Dark Mode Support**: Professional dark theme for reduced eye strain
+- **Enhanced Contrast**: Improved text readability throughout the interface
 
 ## Getting Started
 
@@ -101,7 +105,11 @@ The dashboard provides an at-a-glance view of your deployment infrastructure:
 2. Fill in project details:
    - **Project Name**: Unique identifier
    - **Local Path**: Path to your project on local machine
-   - **SSH Details**: Host, username, password, port
+   - **SSH Details**: 
+     - Host, username, port
+     - Authentication method (Password or Private Key)
+     - Password or private key path with optional passphrase
+     - Port forwarding configuration (optional)
    - **Remote Path**: Absolute path on deployment server
 3. Add deployment steps:
    - **Step Name**: Descriptive name (e.g., "Install Dependencies")
@@ -214,14 +222,53 @@ During deployment, AutoDeploy will automatically provide the configured response
 - Success rate tracking
 - Most active projects
 
+## New Features (2025)
+
+### SSH Key Authentication
+The GUI now fully supports SSH key authentication:
+- **Authentication Method Selection**: Radio buttons for Password vs Private Key
+- **Key Path Input**: File path field with validation
+- **Passphrase Support**: Optional passphrase field for encrypted keys
+- **Visual Tips**: Helpful hints about key permissions and formats
+- **Connection Testing**: Test SSH connection before saving
+
+### JSON Editor Mode
+Enhanced configuration editing:
+- **Mode Toggle**: Switch between Form and JSON views
+- **File Selection**: Choose specific files to edit:
+  - Full Config (entire project)
+  - Config Only (settings and credentials)
+  - Local Steps (local deployment steps)
+  - Remote Steps (remote deployment steps)
+- **Real-time Validation**: Green/red indicators for valid/invalid JSON
+- **Syntax Highlighting**: Proper JSON formatting
+- **File Location Display**: Shows actual file paths
+
+### Deployment History Enhancements
+- **Deployment Timing**: Shows duration for each step
+- **Total Time**: Overall deployment duration
+- **Stopped Deployments**: Tracks manually cancelled deployments
+- **Detailed Logs**: Step outputs stored in separate logs.json
+- **Last 10 History**: Quick view on project cards
+
+### Documentation Integration
+- **Sidebar Access**: Documentation expandable in main navigation
+- **9 Sections**: Complete guide within the GUI
+- **Direct Routes**: Each section has its own URL
+- **Enhanced Contrast**: Improved readability with darker text
+
 ## User Interface
 
 ### Navigation
 - **Sidebar**: Always visible on desktop, collapsible on mobile
+  - Dashboard
+  - Projects
+  - Documentation (expandable)
+  - Settings
 - **Dashboard**: Home view with statistics
-- **Projects**: Grid view of all projects
-- **Add Project**: Form for new configurations
-- **Deployment**: Active deployment terminal
+- **Projects**: Grid view of all projects with history
+- **Add Project**: Multi-tab form for new configurations
+- **Deployment**: Active deployment terminal with auto-scroll
 
 ### Responsive Design
 - **Desktop**: Full sidebar, multi-column layouts
@@ -318,23 +365,93 @@ AUTODEPLOY_NO_OPEN=false
 
 ## Security
 
-### SSH Credentials
+### SSH Authentication Methods
+
+#### Password Authentication
+- Traditional username/password
+- Encrypted storage using AES-256-GCM
+- Secure password input fields
+- Good for development/testing environments
+
+#### Private Key Authentication
+- Support for PEM files (AWS EC2, Google Cloud, Azure)
+- Standard SSH keys (id_rsa, id_ed25519, etc.)
+- Optional passphrase protection
+- More secure than passwords
+- Required by most cloud providers
+
+#### Key File Requirements
+- Must use absolute paths (no ~ symbol)
+- Proper permissions (chmod 600)
+- Readable by the AutoDeploy process
+- Common locations displayed as hints
+
+#### Port Forwarding
+- Configure SSH tunnels for databases
+- Format: localPort:remoteHost:remotePort
+- Example: 5433:database.internal:5432
+- Useful for secure database connections during deployment
+
+### SSH Credentials Storage
 - Encrypted storage using AES-256-GCM
 - Stored in `~/.autodeploy/projects/<project>/config.json`
 - Never transmitted in plain text
 - Machine-specific encryption keys
-- Secure password input fields
+- Private key paths encrypted, not the key contents
 
 ### Configuration Structure
-- Each project has its own encrypted directory
-- Separate files for different data types:
-  - `config.json` - Credentials and project settings
-  - `local-steps.json` - Local deployment steps
-  - `remote-steps.json` - Remote deployment steps
-  - `history.json` - Deployment history (last 50)
-  - `stats.json` - Deployment statistics
+Each project has its own encrypted directory with organized files:
+
+```
+~/.autodeploy/projects/
+├── my-project/
+│   ├── config.json       # Credentials and project settings
+│   ├── local-steps.json  # Local deployment steps
+│   ├── remote-steps.json # Remote deployment steps
+│   ├── history.json      # Deployment history (last 50)
+│   ├── logs.json        # Detailed deployment logs (NEW)
+│   └── stats.json       # Deployment statistics
+└── my-monorepo/
+    ├── config.json       # Main monorepo config
+    ├── history.json      # Aggregated history (NEW)
+    ├── logs.json        # Aggregated logs (NEW)
+    ├── stats.json       # Overall statistics (NEW)
+    └── sub-deployments/
+        ├── frontend/
+        │   ├── config.json
+        │   ├── local-steps.json
+        │   ├── remote-steps.json
+        │   ├── history.json
+        │   ├── logs.json
+        │   └── stats.json
+        └── backend/
+            └── ... (same structure)
+```
+
+#### Example config.json with SSH key:
+```json
+{
+  "name": "production-api",
+  "localPath": "/Users/me/projects/api",
+  "remotePath": "/var/www/api",
+  "ssh": {
+    "host": "api.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/me/.ssh/deploy-key.pem",
+    "passphrase": "encrypted-passphrase",
+    "port": 22,
+    "sshOptions": {
+      "ServerAliveInterval": 60
+    }
+  },
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-01-12T10:00:00Z"
+}
+```
+
 - All files encrypted with AES-256-GCM
 - File permissions set to 0600
+- Encryption keys derived from machine ID
 
 ### API Security
 - CORS protection
@@ -373,11 +490,51 @@ autodeploy gui --port 8081 --api-port 3001
 - Ensure EventSource properly closes
 - Check for deployment step loops
 
-#### Connection Errors
+#### SSH Connection Errors
+
+**Password Authentication Issues:**
 ```bash
 # Test SSH manually
 ssh user@host -p 22
 
+# Check if password auth is enabled on server
+grep PasswordAuthentication /etc/ssh/sshd_config
+```
+
+**Private Key Authentication Issues:**
+```bash
+# Test with your key
+ssh -i /path/to/key.pem user@host
+
+# Check key permissions
+ls -la /path/to/key.pem
+# Should show: -rw------- (600)
+
+# Fix permissions if needed
+chmod 600 /path/to/key.pem
+
+# Verify key format
+head -1 /path/to/key.pem
+# Should show: -----BEGIN RSA PRIVATE KEY----- or similar
+```
+
+**Common SSH Errors:**
+- **"Permission denied (publickey)"**: Wrong key or key not authorized
+- **"Bad permissions"**: Key file permissions too open (must be 600)
+- **"No such file"**: Check absolute path to key file
+- **"Bad passphrase"**: Wrong passphrase or key has no passphrase
+
+**Port Forwarding Issues:**
+```bash
+# Test port forwarding manually
+ssh -i key.pem -L 5433:database.host:5432 user@host
+
+# Check if local port is already in use
+lsof -i :5433
+```
+
+#### General Connection Issues
+```bash
 # Check firewall rules
 # Verify credentials
 # Check remote path exists

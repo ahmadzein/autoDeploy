@@ -22,40 +22,61 @@ export class PipelineExecutor {
                 const spinner = ora(`Step ${i + 1}/${steps.length}: ${step.name}`).start();
                 
                 try {
-                    // Debug logging for main execute method
-                    console.log(chalk.gray(`[DEBUG] Processing step ${i + 1}: ${step.name}`));
-                    console.log(chalk.gray(`[DEBUG] Step interactive flag: ${step.interactive || false}`));
-                    console.log(chalk.gray(`[DEBUG] Step command: ${step.command}`));
+                    // Process the step
                     
                     let command = step.command;
+                    let finalCommand;
+                    
+                    // Handle environment variables
+                    let envVarsString = '';
+                    if (step.envVars && step.envVars.length > 0) {
+                        const envVars = step.envVars.map(env => `export ${env.name}="${env.value}"`).join('; ');
+                        envVarsString = `${envVars}; `;
+                    }
                     
                     // Check if this is an interactive command
-                    if (step.interactive) {
-                        console.log(chalk.gray(`[DEBUG] Step is marked as interactive in main execute`));
-                        // For Ghost commands, add --no-prompt
-                        const isGhostCommand = command.toLowerCase().includes('ghost ');
-                        if (isGhostCommand) {
-                            const oldCommand = command;
-                            command = command.replace(/ghost (\w+)/, 'ghost $1 --no-prompt');
-                            console.log(chalk.gray(`[DEBUG] Modified Ghost command in main execute from: ${oldCommand}`));
-                            console.log(chalk.gray(`[DEBUG] Modified Ghost command in main execute to: ${command}`));
+                    if (step.interactive && step.inputs && step.inputs.length > 0) {
+                        // Create an expect script for handling interactive inputs
+                        const expectInputs = step.inputs.map(input => {
+                            const value = input.defaultValue || '';
+                            return `expect "${input.prompt}" { send "${value}\\r" }`;
+                        }).join('\n');
+                        
+                        const expectScript = `expect << 'EOF'
+spawn bash -c "${envVarsString}cd ${this.projectPath} && ${command}"
+${expectInputs}
+expect eof
+EOF`;
+                        
+                        finalCommand = expectScript;
+                        finalCommand = expectScript;
+                    } else {
+                        // Non-interactive or interactive without inputs
+                        if (step.interactive) {
+                            // For Ghost commands without inputs, add --no-prompt (except backup which needs auth)
+                            const isGhostCommand = command.toLowerCase().includes('ghost ');
+                            const isGhostBackup = command.toLowerCase().includes('ghost backup');
+                            
+                            if (isGhostCommand && !isGhostBackup) {
+                                command = command.replace(/ghost (\w+)/, 'ghost $1 --no-prompt');
+                            }
+                        }
+                        
+                        // Escape single quotes in command
+                        const escapedCommand = command.replace(/'/g, "'\\''");
+                    
+                        // Source .bashrc and .profile explicitly, then run command
+                        const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
+                        
+                        if (!step.workingDir || step.workingDir === '.') {
+                            finalCommand = `bash -c '${sourceFiles} ${envVarsString}cd ${this.projectPath} && ${escapedCommand}'`;
+                        } else {
+                            finalCommand = `bash -c '${sourceFiles} ${envVarsString}cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
                         }
                     }
                     
-                    // Escape single quotes in command
-                    const escapedCommand = command.replace(/'/g, "'\\''");
-                    
-                    // Source .bashrc and .profile explicitly, then run command
-                    const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
-                    
-                    if (!step.workingDir || step.workingDir === '.') {
-                        command = `bash -c '${sourceFiles} cd ${this.projectPath} && ${escapedCommand}'`;
-                    } else {
-                        command = `bash -c '${sourceFiles} cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
-                    }
-                    
-                    console.log(chalk.gray(`[DEBUG] Final command in main execute: ${command}`));
-                    const result = await connection.exec(command);
+                    // Execute the command
+                    const result = await connection.exec(finalCommand);
                     
                     if (result.code === 0) {
                         spinner.succeed(`${step.name} ${chalk.green('')}`);
@@ -130,11 +151,7 @@ export class PipelineExecutor {
             
             let command = step.command;
             
-            // Debug logging
-            console.log(chalk.gray(`\n[DEBUG] Executing step: ${step.name}`));
-            console.log(chalk.gray(`[DEBUG] Original command: ${command}`));
-            console.log(chalk.gray(`[DEBUG] Interactive: ${step.interactive || false}`));
-            console.log(chalk.gray(`[DEBUG] Working dir: ${step.workingDir || '.'}`));
+            // Process the step
             
             // Handle environment variables
             let envVarsString = '';

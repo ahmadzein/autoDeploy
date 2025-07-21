@@ -11,6 +11,7 @@ function EditSubDeployment() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [authMethod, setAuthMethod] = useState('password');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -21,6 +22,8 @@ function EditSubDeployment() {
       host: '',
       username: '',
       password: '',
+      privateKeyPath: '',
+      passphrase: '',
       port: '22'
     },
     localSteps: [],
@@ -78,6 +81,12 @@ function EditSubDeployment() {
         localSteps: subDeployment.localSteps || [],
         deploymentSteps: subDeployment.deploymentSteps || []
       });
+      
+      // Set auth method based on SSH configuration
+      const sshConfig = subDeployment.ssh || projectData.ssh;
+      if (sshConfig?.privateKeyPath) {
+        setAuthMethod('key');
+      }
     } catch (err) {
       console.error('Error fetching sub-deployment:', err);
       navigate(`/projects/${projectName}/sub-deployments`);
@@ -313,6 +322,19 @@ function EditSubDeployment() {
         ssh: formData.inheritSSH ? undefined : formData.ssh
       };
       
+      // Clean up SSH config based on auth method if not inheriting
+      if (!formData.inheritSSH && subData.ssh) {
+        if (authMethod === 'password') {
+          delete subData.ssh.privateKeyPath;
+          delete subData.ssh.passphrase;
+        } else {
+          delete subData.ssh.password;
+          if (!subData.ssh.passphrase) {
+            delete subData.ssh.passphrase;
+          }
+        }
+      }
+      
       await projectAPI.updateSubDeployment(projectName, subName, subData);
       navigate(`/projects/${projectName}/sub-deployments`);
     } catch (err) {
@@ -455,19 +477,82 @@ function EditSubDeployment() {
                 />
               </div>
               
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
+                  Authentication Method
                 </label>
-                <input
-                  type="password"
-                  name="ssh.password"
-                  value={formData.ssh.password}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                />
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="authMethod"
+                      value="password"
+                      checked={authMethod === 'password'}
+                      onChange={(e) => setAuthMethod(e.target.value)}
+                      className="mr-2"
+                    />
+                    Password
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="authMethod"
+                      value="key"
+                      checked={authMethod === 'key'}
+                      onChange={(e) => setAuthMethod(e.target.value)}
+                      className="mr-2"
+                    />
+                    Private Key (PEM file)
+                  </label>
+                </div>
               </div>
+              
+              {authMethod === 'password' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    name="ssh.password"
+                    value={formData.ssh.password}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Private Key Path
+                    </label>
+                    <input
+                      type="text"
+                      name="ssh.privateKeyPath"
+                      value={formData.ssh.privateKeyPath || ''}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="/Users/you/.ssh/id_rsa or .pem file"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Full path to your private key file</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Passphrase (optional)
+                    </label>
+                    <input
+                      type="password"
+                      name="ssh.passphrase"
+                      value={formData.ssh.passphrase || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="Leave empty if key has no passphrase"
+                    />
+                  </div>
+                </>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -486,7 +571,7 @@ function EditSubDeployment() {
                 <button
                   type="button"
                   onClick={handleTestConnection}
-                  disabled={testing || !formData.ssh.host || !formData.ssh.username || !formData.ssh.password}
+                  disabled={testing || !formData.ssh.host || !formData.ssh.username || (authMethod === 'password' ? !formData.ssh.password : !formData.ssh.privateKeyPath)}
                   className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {testing ? 'Testing...' : 'Test Connection'}
@@ -587,7 +672,7 @@ function EditSubDeployment() {
               value={newLocalStep.command}
               onChange={handleLocalStepChange}
               name="command"
-              placeholder="Command to run"
+              placeholder="Command to run (for nested SSH use: ssh server 'command')"
               className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono"
             />
             <div className="space-y-4">
@@ -714,7 +799,7 @@ function EditSubDeployment() {
               value={newRemoteStep.command}
               onChange={handleRemoteStepChange}
               name="command"
-              placeholder="Command to run"
+              placeholder="Command to run (for nested SSH use: ssh server 'command')"
               className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono"
             />
             <div className="space-y-4">

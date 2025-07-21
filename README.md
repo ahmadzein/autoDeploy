@@ -7,26 +7,48 @@ A secure local deployment automation tool that helps you deploy projects to remo
 - [GUI Documentation](GUI_DOCUMENTATION.md) - Comprehensive guide for the web interface
 - [API Documentation](API_DOCUMENTATION.md) - REST API reference
 - [CLI Reference](#cli-usage) - Command line interface guide
+- [SSH Authentication Guide](SSH_AUTHENTICATION_GUIDE.md) - Complete SSH setup and troubleshooting
 - [Monorepo Guide](MONOREPO_GUIDE.md) - Deploy multiple projects from one repository
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
+- [SSH Examples](examples/SSH_EXAMPLES.md) - Real-world SSH configuration examples
 
 ## Features
 
-- 🔐 Encrypted storage of SSH credentials and project configurations
-- 🚀 One-click deployment with automated git commit/push
-- 📦 Customizable deployment pipelines with local and remote steps
+### Core Features
+- 🔐 **Encrypted storage** of SSH credentials and project configurations
+- 🚀 **One-click deployment** with automated git commit/push
+- 📦 **Customizable pipelines** with local and remote deployment steps
 - 🏗️ **Monorepo support** with sub-deployments and coordinated releases
-- 🎯 Support for multiple projects with directory-based configuration
-- 🔄 Automatic git operations (commit, push) before deployment
-- ⏱️ Deployment timing tracking for each step and total duration
-- 🖥️ Interactive CLI with beautiful output and full feature parity
-- 🎨 Modern GUI with React and real-time deployment logs
-- 📊 Deployment history and statistics tracking
-- 📝 JSON editor mode for direct configuration editing
-- 🔧 Graceful handling of "nothing to commit" scenarios
-- 🌐 Integrated documentation viewer in GUI
-- 🔀 **Interactive command support** with auto-fill capabilities for user prompts
-- 📋 **Project and sub-deployment duplication** with name validation
-- 🔄 **Step reordering** in both CLI and GUI with intuitive controls
+- 🎯 **Multi-project support** with organized directory-based configuration
+
+### SSH & Authentication
+- 🔑 **SSH key authentication** with PEM files, id_rsa, id_ed25519
+- 🔒 **Passphrase support** for encrypted private keys
+- 🌐 **Port forwarding** for database connections and internal services
+- 🔐 **Password authentication** with secure encrypted storage
+
+### Deployment Features
+- ⏱️ **Deployment timing** tracking for each step and total duration
+- 📊 **Deployment history** with detailed logs stored separately
+- 📈 **Statistics tracking** including deployments today and success rates
+- 🔄 **Automatic git operations** (commit, push) before deployment
+- 🔧 **Graceful error handling** including "nothing to commit" scenarios
+- ⚡ **Parallel deployments** for monorepo sub-projects
+- 🛑 **Deployment stopping** with proper cleanup and history tracking
+
+### User Interface
+- 🖥️ **Interactive CLI** with beautiful colored output
+- 🎨 **Modern GUI** with React and real-time deployment logs
+- 📝 **JSON editor mode** for direct configuration editing
+- 🌐 **Integrated documentation** viewer in GUI
+- 📋 **File-specific editing** (config, local steps, remote steps)
+
+### Advanced Features
+- 🔀 **Interactive command support** with auto-fill capabilities
+- 📋 **Project duplication** for quick setup of similar projects
+- 🔄 **Step reordering** with drag-and-drop in GUI
+- 🗂️ **Organized file structure** with separate files for different concerns
+- 🔍 **Comprehensive error logs** stored in dedicated logs.json files
 
 ## Installation
 
@@ -79,7 +101,10 @@ autodeploy add-project
 This will prompt you for:
 - Project name
 - Local project path
-- SSH connection details (host, username, password, port)
+- SSH connection details (host, username, authentication method, port)
+  - Password authentication
+  - Private key authentication (PEM files, id_rsa, etc.)
+  - Optional: Port forwarding configuration
 - Remote project path
 - Deployment steps (optional)
 
@@ -129,14 +154,41 @@ autodeploy deploy
 autodeploy deploy my-project
 
 # Deploy monorepo sub-projects
-autodeploy deploy my-monorepo --all              # Deploy all
-autodeploy deploy my-monorepo --sub frontend     # Deploy specific
+autodeploy deploy my-monorepo --all              # Deploy all sub-projects
+autodeploy deploy my-monorepo --sub frontend     # Deploy specific sub-project
 ```
 
-This will:
-1. Commit and push any local changes (if it's a git repository)
-2. Connect to the remote server via SSH
-3. Execute all configured deployment steps
+#### Deployment Process
+1. **Local Steps** (run on your machine):
+   ```bash
+   # Example local steps:
+   - Build application: npm run build
+   - Run tests: npm test
+   - Lint code: npm run lint
+   ```
+
+2. **Git Operations** (if enabled):
+   ```bash
+   # Automatic commit and push
+   git add .
+   git commit -m "Deployment commit"
+   git push origin main
+   ```
+
+3. **Remote Steps** (run on server):
+   ```bash
+   # Example remote steps:
+   - Pull changes: git pull origin main
+   - Install deps: npm ci --production
+   - Run migrations: npm run migrate
+   - Restart service: pm2 restart app
+   ```
+
+#### Deployment Features
+- **Real-time logs**: See command output as it happens
+- **Step timing**: Track how long each step takes
+- **Error handling**: Continue on error or stop deployment
+- **History tracking**: All deployments are recorded with details
 
 ### Edit Project Configuration
 
@@ -241,6 +293,82 @@ autodeploy gui --port 8080 --api-port 3001
 autodeploy gui --production
 ```
 
+## SSH Authentication
+
+AutoDeploy supports multiple SSH authentication methods:
+
+### Password Authentication
+Traditional username/password authentication with encrypted storage:
+```bash
+autodeploy add-project
+# Choose "Password" when prompted for authentication method
+# Enter your SSH password (will be encrypted and stored securely)
+```
+
+### Private Key Authentication
+Support for various SSH private key formats:
+```bash
+autodeploy add-project
+# Choose "Private Key (PEM file)" as auth method
+# Supported key types:
+# - PEM files (AWS EC2, Google Cloud, Azure)
+# - OpenSSH keys (id_rsa, id_ed25519, id_ecdsa)
+# - Keys with passphrases
+
+# Example paths:
+/Users/you/Documents/ssh/aws-ec2-key.pem
+/Users/you/.ssh/id_rsa
+/Users/you/.ssh/id_ed25519
+```
+
+### Port Forwarding
+Configure SSH tunnels for secure database access:
+```bash
+autodeploy add-project
+# When prompted for port forwarding:
+# Format: localPort:remoteHost:remotePort
+
+# Examples:
+5433:localhost:5432              # PostgreSQL on remote server
+3307:database.internal:3306       # MySQL on internal network
+27018:mongo.private:27017         # MongoDB cluster
+6380:redis.local:6379            # Redis instance
+
+# Multiple forwards (comma-separated):
+5433:localhost:5432,3307:mysql.internal:3306
+```
+
+### Advanced SSH Options
+Configure additional SSH options in JSON edit mode:
+```json
+{
+  "ssh": {
+    "host": "server.example.com",
+    "username": "deploy",
+    "privateKeyPath": "/Users/you/.ssh/id_rsa",
+    "passphrase": "encrypted-passphrase",
+    "port": 22,
+    "sshOptions": {
+      "ServerAliveInterval": 60,
+      "ServerAliveCountMax": 3,
+      "StrictHostKeyChecking": "no"
+    }
+  }
+}
+```
+
+### Editing SSH Credentials
+Update SSH settings without affecting other configuration:
+```bash
+# Interactive mode
+autodeploy edit my-project
+# Choose "Edit SSH credentials"
+
+# JSON mode for specific file
+autodeploy edit my-project --json
+# Select "Config Only" to edit SSH settings
+```
+
 ## Security
 
 ### Security Features
@@ -252,7 +380,7 @@ autodeploy gui --production
   - `remote-steps.json` - Steps that run on the deployment server
   - `history.json` - Deployment history (last 50 deployments)
   - `stats.json` - Deployment statistics
-- SSH passwords are encrypted using AES-256-GCM encryption
+- SSH passwords and private key paths are encrypted using AES-256-GCM encryption
 - All config files have restricted permissions (600)
 - Encryption keys are derived from your machine's hardware identifiers
 
@@ -260,27 +388,140 @@ autodeploy gui --production
 
 - `AUTODEPLOY_SECRET`: Custom encryption key (recommended for production use)
 
-## Example Deployment Steps
+## Example Configurations
 
-### Local Steps (run on your machine)
-```
-1. Build application: npm run build
-2. Run tests: npm test
-3. Compress assets: npm run compress
+### Node.js Application
+```bash
+# Local Steps:
+- name: "Install Dependencies"
+  command: "npm install"
+  workingDir: "."
+  
+- name: "Run Tests"
+  command: "npm test"
+  continueOnError: false
+  
+- name: "Build Application"
+  command: "npm run build"
+  workingDir: "."
+
+# Remote Steps:
+- name: "Pull Latest Code"
+  command: "git pull origin main"
+  workingDir: "."
+  
+- name: "Install Production Dependencies"
+  command: "npm ci --production"
+  workingDir: "."
+  
+- name: "Run Database Migrations"
+  command: "npm run migrate"
+  continueOnError: false
+  
+- name: "Restart Application"
+  command: "pm2 restart ecosystem.config.js"
+  workingDir: "."
 ```
 
-### Remote Steps (run on server)
-```
-1. Pull latest changes: git pull origin main
-2. Install dependencies: npm ci --production
-3. Run migrations: npm run migrate
-4. Restart service: pm2 restart app
+### Python/Django Application
+```bash
+# Local Steps:
+- name: "Create Virtual Environment"
+  command: "python -m venv venv"
+  workingDir: "."
+  
+- name: "Install Dependencies"
+  command: "./venv/bin/pip install -r requirements.txt"
+  workingDir: "."
+  
+- name: "Run Tests"
+  command: "./venv/bin/python manage.py test"
+  continueOnError: false
+
+# Remote Steps:
+- name: "Pull Latest Code"
+  command: "git pull origin main"
+  
+- name: "Install Dependencies"
+  command: "pip install -r requirements.txt"
+  workingDir: "."
+  
+- name: "Collect Static Files"
+  command: "python manage.py collectstatic --noinput"
+  
+- name: "Run Migrations"
+  command: "python manage.py migrate"
+  
+- name: "Restart Gunicorn"
+  command: "supervisorctl restart gunicorn"
 ```
 
-Each step can be configured with:
-- Custom working directory
-- Continue on error flag
-- Individual timing tracking
+### Docker-based Application
+```bash
+# Local Steps:
+- name: "Build Docker Image"
+  command: "docker build -t myapp:latest ."
+  workingDir: "."
+  
+- name: "Tag Image"
+  command: "docker tag myapp:latest registry.example.com/myapp:latest"
+  
+- name: "Push to Registry"
+  command: "docker push registry.example.com/myapp:latest"
+
+# Remote Steps:
+- name: "Pull Latest Image"
+  command: "docker pull registry.example.com/myapp:latest"
+  
+- name: "Stop Current Container"
+  command: "docker-compose down"
+  continueOnError: true
+  
+- name: "Start New Container"
+  command: "docker-compose up -d"
+  
+- name: "Health Check"
+  command: "docker-compose ps"
+```
+
+### Monorepo Example
+```bash
+# Main project: my-app
+# Sub-deployments: frontend, backend, shared-lib
+
+# Frontend (React):
+Local Steps:
+- name: "Install Dependencies"
+  command: "npm install"
+  workingDir: "apps/frontend"
+  
+- name: "Build Frontend"
+  command: "npm run build"
+  workingDir: "apps/frontend"
+
+Remote Steps:
+- name: "Deploy to CDN"
+  command: "aws s3 sync dist/ s3://my-bucket/"
+  workingDir: "apps/frontend"
+
+# Backend (Node.js):
+Local Steps:
+- name: "Install Dependencies"
+  command: "npm install"
+  workingDir: "apps/backend"
+  
+- name: "Run Tests"
+  command: "npm test"
+  workingDir: "apps/backend"
+
+Remote Steps:
+- name: "Install Production Deps"
+  command: "npm ci --production"
+  workingDir: "apps/backend"
+  
+- name: "Restart Service"
+  command: "pm2 restart backend"
+```
 
 ## Project Structure
 
@@ -308,14 +549,29 @@ autoDeploy/
 ```
 ~/.autodeploy/
 ├── projects/
-│   ├── project-name/
-│   │   ├── config.json      # Project settings & SSH credentials
-│   │   ├── local-steps.json # Local deployment steps
+│   ├── regular-project/
+│   │   ├── config.json       # Project settings & SSH credentials
+│   │   ├── local-steps.json  # Local deployment steps
 │   │   ├── remote-steps.json # Remote deployment steps
-│   │   ├── history.json     # Deployment history
-│   │   └── stats.json       # Deployment statistics
-│   └── another-project/
-└── projects.json.backup     # Backup of old format (if migrated)
+│   │   ├── history.json      # Deployment history (metadata only)
+│   │   ├── logs.json         # Detailed deployment logs and step outputs
+│   │   └── stats.json        # Deployment statistics
+│   └── monorepo-project/
+│       ├── config.json       # Main monorepo configuration
+│       ├── history.json      # Main project deployment history
+│       ├── logs.json         # Main project logs
+│       ├── stats.json        # Main project statistics
+│       └── sub-deployments/  # Sub-project configurations
+│           ├── frontend/
+│           │   ├── config.json
+│           │   ├── local-steps.json
+│           │   ├── remote-steps.json
+│           │   ├── history.json
+│           │   ├── logs.json
+│           │   └── stats.json
+│           └── backend/
+│               └── ... (same structure)
+└── projects.json.backup      # Backup of old format (if migrated)
 ```
 
 ## Building

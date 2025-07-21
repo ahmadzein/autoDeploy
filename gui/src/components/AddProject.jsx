@@ -6,6 +6,7 @@ import { projectAPI } from '../utils/api';
 function AddProject() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [authMethod, setAuthMethod] = useState('password');
   const [formData, setFormData] = useState({
     name: '',
     localPath: '',
@@ -13,6 +14,8 @@ function AddProject() {
       host: '',
       username: '',
       password: '',
+      privateKeyPath: '',
+      passphrase: '',
       port: '22'
     },
     remotePath: '',
@@ -114,7 +117,26 @@ function AddProject() {
     setLoading(true);
     
     try {
-      await projectAPI.add(formData);
+      // Validate project name
+      if (!formData.name || formData.name.trim() === '') {
+        alert('Project name is required');
+        setLoading(false);
+        return;
+      }
+      
+      // Clean up SSH config based on auth method
+      const projectData = { ...formData };
+      if (authMethod === 'password') {
+        delete projectData.ssh.privateKeyPath;
+        delete projectData.ssh.passphrase;
+      } else {
+        delete projectData.ssh.password;
+        if (!projectData.ssh.passphrase) {
+          delete projectData.ssh.passphrase;
+        }
+      }
+      
+      await projectAPI.add(projectData);
       navigate('/projects');
     } catch (err) {
       console.error('Error adding project:', err);
@@ -154,7 +176,7 @@ function AddProject() {
                 onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
-                placeholder="my-awesome-project"
+                placeholder="My Awesome Project"
               />
             </div>
             <div>
@@ -177,6 +199,24 @@ function AddProject() {
         {/* SSH Configuration */}
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">SSH Configuration</h3>
+          
+          {/* Help Info Box */}
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-amber-800">SSH Authentication Methods</h3>
+                <div className="mt-2 text-sm text-amber-700">
+                  <p><strong>Password:</strong> Simple but less secure. Good for testing.</p>
+                  <p className="mt-1"><strong>Private Key:</strong> More secure. Required by most cloud providers (AWS, GCP, Azure).</p>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -206,19 +246,89 @@ function AddProject() {
                 placeholder="deploy-user"
               />
             </div>
-            <div>
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
+                Authentication Method
               </label>
-              <input
-                type="password"
-                name="ssh.password"
-                value={formData.ssh.password}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
+              <div className="flex gap-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="authMethod"
+                    value="password"
+                    checked={authMethod === 'password'}
+                    onChange={(e) => setAuthMethod(e.target.value)}
+                    className="mr-2"
+                  />
+                  Password
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="authMethod"
+                    value="key"
+                    checked={authMethod === 'key'}
+                    onChange={(e) => setAuthMethod(e.target.value)}
+                    className="mr-2"
+                  />
+                  Private Key (PEM file)
+                </label>
+              </div>
             </div>
+            {authMethod === 'password' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  name="ssh.password"
+                  value={formData.ssh.password}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Private Key Path
+                  </label>
+                  <input
+                    type="text"
+                    name="ssh.privateKeyPath"
+                    value={formData.ssh.privateKeyPath}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="/Users/you/.ssh/id_rsa or .pem file"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Full path to your private key file</p>
+                  <div className="mt-2 p-3 bg-blue-50 rounded-md">
+                    <p className="text-xs text-blue-700">
+                      <strong>Common locations:</strong><br />
+                      • AWS EC2: /Users/[you]/Downloads/*.pem<br />
+                      • Standard SSH: /Users/[you]/.ssh/id_rsa<br />
+                      • Ensure permissions: chmod 600 your-key.pem
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Passphrase (optional)
+                  </label>
+                  <input
+                    type="password"
+                    name="ssh.passphrase"
+                    value={formData.ssh.passphrase}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Leave empty if key has no passphrase"
+                  />
+                </div>
+              </>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Port

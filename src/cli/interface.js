@@ -11,6 +11,7 @@ import { SSHConnection } from '../ssh/connection.js';
 import { PipelineExecutor } from '../pipeline/executor.js';
 import { startGUIService, startGUIProduction } from './gui-service.js';
 import { handleEditCommand } from './edit-command.js';
+import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
 
 const program = new Command();
 const configManager = new ConfigManager();
@@ -132,12 +133,57 @@ async function createStep(stepType = 'deployment') {
 
 program
     .name('autodeploy')
-    .description('Local deployment automation tool')
-    .version('1.1.0');
+    .description('Local deployment automation tool with SSH key authentication support')
+    .version('1.1.0')
+    .addHelpText('after', `
+SSH Authentication:
+  AutoDeploy supports both password and SSH key authentication:
+  - Password: Traditional username/password authentication
+  - SSH Key: Use PEM files or standard SSH keys (id_rsa, id_ed25519, etc.)
+  
+Examples:
+  $ autodeploy add-project              # Interactive setup with auth method selection
+  $ autodeploy edit my-project          # Edit project including SSH credentials
+  $ autodeploy create-monorepo          # Create monorepo with SSH key support
+
+SSH Key Examples:
+  AWS EC2: /Users/you/Documents/ssh/my-server.pem
+  Standard: /Users/you/.ssh/id_rsa
+  With passphrase: Enter passphrase when prompted
+
+Port Forwarding:
+  Configure SSH tunnels during project setup for database connections
+  Format: localPort:remoteHost:remotePort (e.g., 7777:database.internal:5432)
+`);
 
 program
     .command('add-project')
-    .description('Add a new project configuration')
+    .description('Add a new project configuration with SSH authentication')
+    .addHelpText('after', `
+This command will guide you through:
+  1. Project name and local path setup
+  2. SSH connection configuration:
+     - Host, username, and port
+     - Authentication method (password or private key)
+     - Optional port forwarding for database tunnels
+  3. Remote deployment path
+  4. Optional deployment steps configuration
+
+SSH Key Authentication:
+  When selecting "Private Key (PEM file)", you'll need:
+  - Full path to your private key file
+  - Optional passphrase if the key is encrypted
+  
+  Supported key types:
+  - PEM files (commonly used with AWS EC2)
+  - Standard SSH keys (id_rsa, id_ed25519, etc.)
+  - Any OpenSSH-compatible private key
+
+Example key paths:
+  - AWS: /Users/you/Documents/ssh/my-ec2-key.pem
+  - Standard: /Users/you/.ssh/id_rsa
+  - Custom: /path/to/your/private-key
+`)
     .action(async () => {
         const answers = await inquirer.prompt([
             {
@@ -165,12 +211,54 @@ program
                 validate: input => input.length > 0 || 'Username is required'
             },
             {
-                type: 'password',
-                name: 'password',
-                message: 'SSH password:',
-                mask: '*',
-                validate: input => input.length > 0 || 'Password is required'
-            },
+                type: 'list',
+                name: 'authMethod',
+                message: 'SSH authentication method:',
+                choices: [
+                    { name: 'Password', value: 'password' },
+                    { name: 'Private Key (PEM file)', value: 'key' }
+                ]
+            }
+        ]);
+
+        // Auth-specific prompts
+        let authAnswers = {};
+        if (answers.authMethod === 'password') {
+            authAnswers = await inquirer.prompt([
+                {
+                    type: 'password',
+                    name: 'password',
+                    message: 'SSH password:',
+                    mask: '*',
+                    validate: input => input.length > 0 || 'Password is required'
+                }
+            ]);
+        } else {
+            authAnswers = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'privateKeyPath',
+                    message: 'Path to private key file (e.g., /Users/you/.ssh/id_rsa or .pem file):',
+                    validate: input => {
+                        if (input.length === 0) return 'Private key path is required';
+                        if (input.includes('~')) return 'Please use absolute path (expand ~ to full path)';
+                        return true;
+                    }
+                },
+                {
+                    type: 'password',
+                    name: 'passphrase',
+                    message: 'Private key passphrase (press enter if none):',
+                    mask: '*'
+                }
+            ]);
+            console.log(chalk.gray('\n💡 Tip: Common key locations:'));
+            console.log(chalk.gray('   AWS EC2: /Users/[username]/Downloads/*.pem'));
+            console.log(chalk.gray('   Standard SSH: /Users/[username]/.ssh/id_rsa'));
+            console.log(chalk.gray('   Make sure the key file has proper permissions (chmod 600)\n'));
+        }
+
+        const remainingAnswers = await inquirer.prompt([
             {
                 type: 'input',
                 name: 'remotePath',
@@ -187,8 +275,55 @@ program
                 message: 'SSH port (default: 22):',
                 default: '22',
                 validate: input => !isNaN(parseInt(input)) || 'Port must be a number'
+            },
+            {
+                type: 'confirm',
+                name: 'hasForwarding',
+                message: 'Do you need port forwarding or additional SSH options?',
+                default: false
             }
         ]);
+
+        // Merge all answers
+        Object.assign(answers, authAnswers, remainingAnswers);
+
+        // Handle port forwarding and additional options
+        let sshOptions = {};
+        if (answers.hasForwarding) {
+            const forwardingAnswers = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'portForwarding',
+                    message: 'Port forwarding rules (e.g., "7777:database.host.com:5432", leave empty for none):'
+                },
+                {
+                    type: 'input',
+                    name: 'additionalOptions',
+                    message: 'Additional SSH options (JSON format, e.g., {"keepaliveInterval": 30000}):'
+                }
+            ]);
+
+            if (forwardingAnswers.portForwarding) {
+                // Parse port forwarding (format: localPort:remoteHost:remotePort)
+                const parts = forwardingAnswers.portForwarding.split(':');
+                if (parts.length === 3) {
+                    sshOptions.localPortForwarding = [{
+                        localPort: parseInt(parts[0]),
+                        remoteHost: parts[1],
+                        remotePort: parseInt(parts[2])
+                    }];
+                }
+            }
+
+            if (forwardingAnswers.additionalOptions) {
+                try {
+                    const additionalOpts = JSON.parse(forwardingAnswers.additionalOptions);
+                    Object.assign(sshOptions, additionalOpts);
+                } catch (e) {
+                    console.log(chalk.yellow('Warning: Invalid JSON for additional options, ignoring.'));
+                }
+            }
+        }
 
         const pipelineAnswers = await inquirer.prompt([
             {
@@ -245,19 +380,41 @@ program
             }
         }
 
+        // Generate slug from project name
+        const existingProjects = configManager.getAllProjects();
+        const existingSlugs = existingProjects.map(p => p.slug || p.name);
+        const baseSlug = createSlug(answers.name);
+        const slug = ensureUniqueSlug(baseSlug, existingSlugs);
+        
         const project = {
-            name: answers.name,
+            name: slug,
+            displayName: answers.name,
+            slug: slug,
             localPath: answers.localPath,
             ssh: {
                 host: answers.host,
                 username: answers.username,
-                password: answers.password,
                 port: parseInt(answers.port)
             },
             remotePath: answers.remotePath,
             localSteps: localSteps,
             deploymentSteps: steps
         };
+
+        // Add authentication details
+        if (answers.authMethod === 'password') {
+            project.ssh.password = answers.password;
+        } else {
+            project.ssh.privateKeyPath = answers.privateKeyPath;
+            if (answers.passphrase) {
+                project.ssh.passphrase = answers.passphrase;
+            }
+        }
+
+        // Add SSH options if provided
+        if (Object.keys(sshOptions).length > 0) {
+            project.ssh.sshOptions = sshOptions;
+        }
 
         const spinner = ora('Testing SSH connection...').start();
         const sshConnection = new SSHConnection(project.ssh);
@@ -266,7 +423,7 @@ program
         if (testResult.success) {
             spinner.succeed('SSH connection successful');
             configManager.addProject(project);
-            console.log(chalk.green(`\n✓ Project "${answers.name}" added successfully!`));
+            console.log(chalk.green(`\n✓ Project "${project.displayName}" added successfully!`));
         } else {
             spinner.fail('SSH connection failed');
             console.error(chalk.red(`\nError: ${testResult.message}`));
@@ -280,7 +437,7 @@ program
             ]);
             if (saveAnyway) {
                 configManager.addProject(project);
-                console.log(chalk.yellow(`\n⚠ Project "${answers.name}" saved with connection issues`));
+                console.log(chalk.yellow(`\n⚠ Project "${project.displayName}" saved with connection issues`));
             }
         }
     });
@@ -298,7 +455,8 @@ program
         console.log(chalk.blue('\nConfigured Projects:\n'));
         projects.forEach((project, index) => {
             const typeLabel = project.type === 'monorepo' ? chalk.cyan(' [MONOREPO]') : '';
-            console.log(`${index + 1}. ${chalk.bold(project.name)}${typeLabel}`);
+            const displayName = project.displayName || project.name;
+            console.log(`${index + 1}. ${chalk.bold(displayName)}${typeLabel}`);
             console.log(`   Local: ${project.localPath}`);
             console.log(`   Remote: ${project.ssh.username}@${project.ssh.host}:${project.remotePath}`);
             
@@ -321,6 +479,28 @@ program
 program
     .command('create-monorepo')
     .description('Create a new monorepo project')
+    .addHelpText('after', `
+Monorepo projects allow you to manage multiple sub-deployments from a single repository.
+
+SSH Configuration:
+  The SSH credentials you set here will be the default for all sub-deployments.
+  Sub-deployments can override these settings if needed.
+  
+  Supports both:
+  - Password authentication
+  - Private key authentication (PEM files, id_rsa, etc.)
+
+After creating a monorepo:
+  $ autodeploy add-sub <monorepo-name>     # Add sub-deployments
+  $ autodeploy list-sub <monorepo-name>    # List all sub-deployments
+  $ autodeploy deploy <monorepo-name>      # Deploy sub-projects
+
+Example workflow:
+  1. Create monorepo: autodeploy create-monorepo
+  2. Add frontend: autodeploy add-sub my-app (path: apps/frontend)
+  3. Add backend: autodeploy add-sub my-app (path: apps/backend)
+  4. Deploy all: autodeploy deploy my-app --all
+`)
     .action(async () => {
         const answers = await inquirer.prompt([
             {
@@ -348,12 +528,54 @@ program
                 validate: input => input.length > 0 || 'Username is required'
             },
             {
-                type: 'password',
-                name: 'password',
-                message: 'SSH password:',
-                mask: '*',
-                validate: input => input.length > 0 || 'Password is required'
-            },
+                type: 'list',
+                name: 'authMethod',
+                message: 'SSH authentication method:',
+                choices: [
+                    { name: 'Password', value: 'password' },
+                    { name: 'Private Key (PEM file)', value: 'key' }
+                ]
+            }
+        ]);
+
+        // Auth-specific prompts
+        let authAnswers = {};
+        if (answers.authMethod === 'password') {
+            authAnswers = await inquirer.prompt([
+                {
+                    type: 'password',
+                    name: 'password',
+                    message: 'SSH password:',
+                    mask: '*',
+                    validate: input => input.length > 0 || 'Password is required'
+                }
+            ]);
+        } else {
+            authAnswers = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'privateKeyPath',
+                    message: 'Path to private key file (e.g., /Users/you/.ssh/id_rsa or .pem file):',
+                    validate: input => {
+                        if (input.length === 0) return 'Private key path is required';
+                        if (input.includes('~')) return 'Please use absolute path (expand ~ to full path)';
+                        return true;
+                    }
+                },
+                {
+                    type: 'password',
+                    name: 'passphrase',
+                    message: 'Private key passphrase (press enter if none):',
+                    mask: '*'
+                }
+            ]);
+            console.log(chalk.gray('\n💡 Tip: Common key locations:'));
+            console.log(chalk.gray('   AWS EC2: /Users/[username]/Downloads/*.pem'));
+            console.log(chalk.gray('   Standard SSH: /Users/[username]/.ssh/id_rsa'));
+            console.log(chalk.gray('   Make sure the key file has proper permissions (chmod 600)\n'));
+        }
+
+        const remainingAnswers = await inquirer.prompt([
             {
                 type: 'input',
                 name: 'port',
@@ -362,20 +584,40 @@ program
             }
         ]);
 
+        // Merge all answers
+        Object.assign(answers, authAnswers, remainingAnswers);
+
+        // Generate slug from project name
+        const existingProjects = configManager.getAllProjects();
+        const existingSlugs = existingProjects.map(p => p.slug || p.name);
+        const baseSlug = createSlug(answers.name);
+        const slug = ensureUniqueSlug(baseSlug, existingSlugs);
+        
         const project = {
-            name: answers.name,
+            name: slug,
+            displayName: answers.name,
+            slug: slug,
             type: 'monorepo',
             localPath: answers.localPath,
             ssh: {
                 host: answers.host,
                 username: answers.username,
-                password: answers.password,
                 port: parseInt(answers.port)
             },
             remotePath: '/var/www', // Base path for monorepo
             deploymentSteps: [],
             subDeployments: []
         };
+
+        // Add authentication details
+        if (answers.authMethod === 'password') {
+            project.ssh.password = answers.password;
+        } else {
+            project.ssh.privateKeyPath = answers.privateKeyPath;
+            if (answers.passphrase) {
+                project.ssh.passphrase = answers.passphrase;
+            }
+        }
 
         // Test SSH connection
         console.log(chalk.blue('\nTesting SSH connection...'));
@@ -388,7 +630,7 @@ program
             testSpinner.succeed('SSH connection successful');
             
             configManager.monorepo.createMonorepoProject(project);
-            console.log(chalk.green(`\n✓ Monorepo project "${project.name}" created successfully!`));
+            console.log(chalk.green(`\n✓ Monorepo project "${project.displayName}" created successfully!`));
             console.log(chalk.gray('Use "autodeploy add-sub <project-name>" to add sub-deployments'));
         } catch (error) {
             testSpinner.fail('SSH connection failed');
@@ -403,7 +645,7 @@ program
 
             if (saveAnyway) {
                 configManager.monorepo.createMonorepoProject(project);
-                console.log(chalk.yellow(`\n⚠ Monorepo "${project.name}" saved with connection issues`));
+                console.log(chalk.yellow(`\n⚠ Monorepo "${project.displayName}" saved with connection issues`));
             }
         }
     });
@@ -714,21 +956,59 @@ program
                 }
             }
 
+            // Track monorepo deployment
+            const monorepoStartTime = Date.now();
+            const monorepoDeploymentSteps = [];
+            let monorepoSuccess = true;
+
             // Deploy each sub-deployment
             for (const subDep of deploymentsToRun) {
                 console.log(chalk.blue(`\n📦 Deploying ${subDep.name}...\n`));
+                
+                // Check if any steps need configuration
+                const interactiveStepsWithoutInputs = subDep.deploymentSteps?.filter(s => s.interactive && (!s.inputs || s.inputs.length === 0)) || [];
+                if (interactiveStepsWithoutInputs.length > 0) {
+                    console.log(chalk.yellow(`⚠️  Warning: The following steps are marked as interactive but have no inputs configured:`));
+                    interactiveStepsWithoutInputs.forEach(s => {
+                        console.log(chalk.yellow(`   - ${s.name}: ${s.command}`));
+                    });
+                    console.log(chalk.gray(`   Configure inputs in the GUI or mark these steps as non-interactive`));
+                }
                 
                 // Create a project object for the sub-deployment
                 const subProject = {
                     ...subDep,
                     name: `${project.name}/${subDep.name}`,
                     localPath: subDep.localPath,
-                    ssh: subDep.ssh || project.ssh // Inherit SSH from parent if not specified
+                    ssh: subDep.ssh || project.ssh, // Inherit SSH from parent if not specified
+                    parentProject: project.name
                 };
 
                 // Deploy using existing logic
-                await deployProject(subProject, configManager);
+                try {
+                    await deployProject(subProject, configManager);
+                    monorepoDeploymentSteps.push({
+                        name: `Deploy ${subDep.name}`,
+                        success: true,
+                        output: `Successfully deployed ${subDep.name}`
+                    });
+                } catch (error) {
+                    monorepoSuccess = false;
+                    monorepoDeploymentSteps.push({
+                        name: `Deploy ${subDep.name}`,
+                        success: false,
+                        output: error.message
+                    });
+                }
             }
+
+            // Record main monorepo deployment
+            const monorepoDeploymentDuration = Date.now() - monorepoStartTime;
+            configManager.recordDeployment(project.name, monorepoSuccess, {
+                duration: monorepoDeploymentDuration,
+                steps: monorepoDeploymentSteps,
+                subDeployments: deploymentsToRun.map(sub => ({ name: sub.name }))
+            });
 
             console.log(chalk.green(`\n✓ Monorepo deployment completed!`));
             return;
@@ -942,9 +1222,13 @@ program
             console.log(`   Status: ${deployment.success ? chalk.green('✓ Success') : deployment.stopped ? chalk.yellow('⚠ Stopped') : chalk.red('✗ Failed')}`);
             console.log(`   Duration: ${duration}`);
             
-            if (deployment.steps && deployment.steps.length > 0) {
+            // Try to get detailed logs from logs.json
+            const logs = configManager.getDeploymentLogs(projectName, deployment.id);
+            const steps = logs?.steps || deployment.steps || [];
+            
+            if (steps.length > 0) {
                 console.log(`   Steps:`);
-                deployment.steps.forEach(step => {
+                steps.forEach(step => {
                     const stepIcon = step.success ? chalk.green('✓') : chalk.red('✗');
                     const stepDuration = step.duration ? ` (${(step.duration / 1000).toFixed(1)}s)` : '';
                     console.log(`     ${stepIcon} ${step.name}${chalk.gray(stepDuration)}`);
@@ -1014,6 +1298,25 @@ program
     .command('edit <project-name>')
     .description('Edit deployment steps for a project')
     .option('-j, --json', 'Edit raw JSON configuration')
+    .addHelpText('after', `
+Edit options:
+  - Local deployment steps
+  - Remote deployment steps
+  - SSH credentials (including auth method switch)
+  - JSON mode for direct configuration editing
+
+SSH Credentials Edit:
+  You can switch between password and private key authentication
+  When editing SSH credentials, you can:
+  - Change host, username, or port
+  - Switch authentication methods
+  - Update private key path or password
+  - Add/remove passphrase for encrypted keys
+
+Examples:
+  $ autodeploy edit my-project              # Interactive edit mode
+  $ autodeploy edit my-project --json       # Direct JSON editing
+`)
     .action(async (projectName, options) => {
         await handleEditCommand(projectName, options, { chalk, inquirer, configManager, program });
     });

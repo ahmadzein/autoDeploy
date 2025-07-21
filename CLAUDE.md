@@ -9,12 +9,16 @@ AutoDeploy is a secure local deployment automation tool that helps deploy projec
 ### Latest Updates (July 2025)
 
 #### Key Features Added:
-1. **Deployment Timing**: Track duration for each step and total deployment time
-2. **Stopped Deployments**: Track manually stopped deployments in history
-3. **SSH PATH Fix**: Use bash login shell to ensure proper PATH loading
-4. **Nothing to Commit Handling**: Gracefully handle Git "nothing to commit" scenarios
-5. **CLI Reference in GUI**: Added comprehensive CLI documentation to GUI
-6. **Deployments Today Fix**: Correctly count all deployments from today
+1. **SSH Key Authentication**: Support for PEM files and private keys with optional passphrases
+2. **Port Forwarding**: Configure SSH port forwarding for database connections
+3. **Deployment Timing**: Track duration for each step and total deployment time
+4. **Stopped Deployments**: Track manually stopped deployments in history
+5. **SSH PATH Fix**: Use bash login shell to ensure proper PATH loading
+6. **Nothing to Commit Handling**: Gracefully handle Git "nothing to commit" scenarios
+7. **CLI Reference in GUI**: Added comprehensive CLI documentation to GUI
+8. **Deployments Today Fix**: Correctly count all deployments from today
+9. **Deployment History Fix**: Fixed history recording for both single and monorepo projects
+10. **Separate Logs Storage**: Deployment logs now stored in separate logs.json file
 
 ### Configuration Structure Refactor
 
@@ -25,7 +29,8 @@ AutoDeploy is a secure local deployment automation tool that helps deploy projec
   - `config.json` - Core project settings and SSH credentials
   - `local-steps.json` - Steps executed on local machine
   - `remote-steps.json` - Steps executed on deployment server
-  - `history.json` - Last 50 deployments with full details
+  - `history.json` - Deployment history metadata (without step logs)
+  - `logs.json` - Detailed deployment logs and step outputs
   - `stats.json` - Deployment statistics and counters
 - **Benefits**:
   - Better organization and maintainability
@@ -167,6 +172,30 @@ if (project.localSteps && project.localSteps.length > 0) {
 - Fixes "command not found" errors for tools like pm2
 - Command format: `bash -c 'source files && cd path && command'`
 
+#### SSH Key Authentication:
+- Support for password and private key authentication methods
+- Compatible with PEM files (AWS EC2, etc.) and standard SSH keys
+- Optional passphrase support for encrypted keys
+- SSH options configuration for advanced use cases
+- Port forwarding support for database tunneling
+- Example configuration:
+```javascript
+ssh: {
+  host: 'example.com',
+  username: 'deploy-user',
+  privateKeyPath: '/Users/you/.ssh/id_rsa',
+  passphrase: 'optional-key-passphrase',
+  port: 22,
+  sshOptions: {
+    localPortForwarding: [{
+      localPort: 7777,
+      remoteHost: 'database.internal',
+      remotePort: 5432
+    }]
+  }
+}
+```
+
 #### Git Operation Handling:
 - Gracefully handles "nothing to commit" scenarios
 - Treats "nothing to commit" as non-error
@@ -286,10 +315,18 @@ gui/src/
 - [ ] SSH commands find tools in PATH (pm2, nvm, etc)
 - [ ] Deployment timing tracks correctly
 - [ ] Stopped deployments show in history
+- [ ] SSH key authentication works with PEM files
+- [ ] SSH key passphrase support functions correctly
+- [ ] Port forwarding configuration saves and loads properly
+- [ ] Edit SSH credentials option in CLI edit command
+- [ ] GUI correctly switches between password and key auth modes
+- [ ] Deployment logs saved separately in logs.json
+- [ ] History command loads logs from separate file
+- [ ] Old deployments still work without logs.json
 
 ## Future Enhancements
 
-1. SSH key authentication support
+1. ~~SSH key authentication support~~ ✅ Implemented
 2. Deployment rollback functionality
 3. Parallel step execution
 4. Step templates/presets

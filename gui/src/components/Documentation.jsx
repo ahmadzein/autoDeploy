@@ -282,13 +282,43 @@ autodeploy gui --port 8081 --api-port 3001
           <div className="bg-gray-100 p-4 rounded-lg mb-4">
             <p className="font-semibold mb-2 text-gray-900">Local Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
-npm run build
-npm test
+{`[
+  {
+    "name": "Install Dependencies",
+    "command": "npm install",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Build Application",
+    "command": "npm run build",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Run Tests",
+    "command": "npm test",
+    "workingDir": ".",
+    "continueOnError": false
+  }
+]`}
             </pre>
             <p className="font-semibold mb-2 mt-4 text-gray-900">Remote Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
-npm ci --production
-pm2 restart app
+{`[
+  {
+    "name": "Install Production Dependencies",
+    "command": "npm ci --production",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Restart Application",
+    "command": "pm2 restart app",
+    "workingDir": ".",
+    "continueOnError": false
+  }
+]`}
             </pre>
           </div>
 
@@ -296,19 +326,67 @@ pm2 restart app
           <div className="bg-gray-100 p-4 rounded-lg mb-4">
             <p className="font-semibold mb-2 text-gray-900">Local Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
-composer install --no-dev
-npm run production
+{`[
+  {
+    "name": "Install Dependencies",
+    "command": "composer install --no-dev",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Build Assets",
+    "command": "npm run production",
+    "workingDir": ".",
+    "continueOnError": false
+  }
+]`}
             </pre>
             <p className="font-semibold mb-2 mt-4 text-gray-900">Remote Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
-php artisan down
-git pull origin main  
-composer install --no-dev --optimize-autoloader
-php artisan migrate --force
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan up
+{`[
+  {
+    "name": "Enable Maintenance Mode",
+    "command": "php artisan down",
+    "workingDir": ".",
+    "continueOnError": true
+  },
+  {
+    "name": "Install Dependencies",
+    "command": "composer install --no-dev --optimize-autoloader",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Run Migrations",
+    "command": "php artisan migrate --force",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Cache Configuration",
+    "command": "php artisan config:cache",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Cache Routes",
+    "command": "php artisan route:cache",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Cache Views",
+    "command": "php artisan view:cache",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Disable Maintenance Mode",
+    "command": "php artisan up",
+    "workingDir": ".",
+    "continueOnError": false
+  }
+]`}
             </pre>
           </div>
 
@@ -316,11 +394,37 @@ php artisan up
           <div className="bg-gray-50 p-4 rounded-lg">
             <p className="font-semibold mb-2 text-gray-900">Local Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
-npm run build
+{`[
+  {
+    "name": "Install Dependencies",
+    "command": "npm install",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Build Static Site",
+    "command": "npm run build",
+    "workingDir": ".",
+    "continueOnError": false
+  }
+]`}
             </pre>
             <p className="font-semibold mb-2 mt-4 text-gray-900">Remote Steps:</p>
             <pre className="bg-gray-900 text-gray-100 p-4 rounded text-sm overflow-x-auto">
-rsync -av --delete ./dist/ /var/www/html/
+{`[
+  {
+    "name": "Copy Built Files",
+    "command": "cp -r ./dist/* /var/www/html/",
+    "workingDir": ".",
+    "continueOnError": false
+  },
+  {
+    "name": "Set File Permissions",
+    "command": "chown -R www-data:www-data /var/www/html/",
+    "workingDir": ".",
+    "continueOnError": true
+  }
+]`}
             </pre>
           </div>
         </div>

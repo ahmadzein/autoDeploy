@@ -12,3 +12,5 @@ gui/node_modules/
 *.app
 *.dmg
 *.exe
+# DeepSeek CLI cache
+.deepseek-cache/
