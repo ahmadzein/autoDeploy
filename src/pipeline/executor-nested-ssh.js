@@ -119,13 +119,14 @@ export class NestedSSHExecutor {
     buildNestedCommand(sshTarget, steps) {
         const commands = [];
         
-        // Add working directory changes
-        commands.push(`cd ${this.projectPath}`);
+        // Don't add working directory here - it should be on the remote server
+        // The projectPath is the path on the REMOTE server (tis-staging-api)
         
         // Add each step's command
         for (const step of steps) {
+            // Handle working directory on the remote server
             if (step.workingDir && step.workingDir !== '.') {
-                commands.push(`cd ${this.projectPath}/${step.workingDir}`);
+                commands.push(`cd ${step.workingDir}`);
             }
             
             // Add environment variables
@@ -139,6 +140,7 @@ export class NestedSSHExecutor {
         
         // Build the SSH command with all nested commands
         const scriptContent = commands.join(' && ');
+        console.log(chalk.yellow('[NESTED-SSH] Remote commands:', scriptContent));
         return `ssh ${sshTarget} 'bash -c "${scriptContent.replace(/"/g, '\\"')}"'`;
     }
 
@@ -153,11 +155,16 @@ export class NestedSSHExecutor {
             
             let command = step.command;
             
-            // Add working directory
-            if (!step.workingDir || step.workingDir === '.') {
-                command = `cd ${this.projectPath} && ${command}`;
-            } else {
-                command = `cd ${this.projectPath}/${step.workingDir} && ${command}`;
+            // For nested SSH commands, don't prepend the cd
+            const isNestedSSH = command.trim().startsWith('ssh ');
+            
+            if (!isNestedSSH) {
+                // Add working directory for non-SSH commands
+                if (!step.workingDir || step.workingDir === '.') {
+                    command = `cd ${this.projectPath} && ${command}`;
+                } else {
+                    command = `cd ${this.projectPath}/${step.workingDir} && ${command}`;
+                }
             }
             
             console.log(chalk.gray('[NESTED-SSH] Executing:', command));
