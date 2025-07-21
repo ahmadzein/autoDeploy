@@ -8,6 +8,7 @@ import { ConfigManager } from '../config/manager.js';
 import { GitOperations } from '../git/operations.js';
 import { SSHConnection } from '../ssh/connection.js';
 import { PipelineExecutor } from '../pipeline/executor.js';
+import { PersistentPipelineExecutor } from '../pipeline/executor-persistent.js';
 import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -341,34 +342,79 @@ export function createAPIServer(port = 3000) {
                     // Execute remote steps for sub-deployment
                     if (subDeployment.deploymentSteps && subDeployment.deploymentSteps.length > 0) {
                         const sshConfig = subDeployment.ssh || project.ssh;
-                        const executor = new PipelineExecutor(sshConfig, subDeployment.remotePath);
                         
-                        for (const step of subDeployment.deploymentSteps) {
-                            const stepStartTime = Date.now();
+                        // Check if persistent sessions are enabled
+                        const usePersistentSession = subDeployment.persistentSession || project.persistentSession;
+                        
+                        if (usePersistentSession) {
+                            // Use persistent executor for all steps in one session
+                            const persistentExecutor = new PersistentPipelineExecutor(sshConfig, subDeployment.remotePath);
                             
                             res.write(`data: ${JSON.stringify({ 
-                                type: 'step', 
-                                message: `[${subDeployment.name}/Remote] Running: ${step.name}` 
+                                type: 'info', 
+                                message: `[${subDeployment.name}] Using persistent SSH session` 
                             })}\n\n`);
                             
-                            const result = await executor.executeStep(step);
-                            
-                            deploymentSteps.push({
-                                name: `[${subDeployment.name}] ${step.name}`,
-                                success: result.success,
-                                output: result.output || result.error,
-                                duration: Date.now() - stepStartTime
-                            });
-                            
-                            res.write(`data: ${JSON.stringify({ 
-                                type: result.success ? 'step-complete' : 'step-error', 
-                                message: result.output || result.error,
-                                step: `${subDeployment.name}/${step.name}`
-                            })}\n\n`);
-                            
-                            if (!result.success && !step.continueOnError) {
+                            try {
+                                const startTime = Date.now();
+                                const results = await persistentExecutor.executeStepsInSession(subDeployment.deploymentSteps);
+                                
+                                results.forEach((result, index) => {
+                                    const step = subDeployment.deploymentSteps[index];
+                                    
+                                    deploymentSteps.push({
+                                        name: `[${subDeployment.name}] ${step.name}`,
+                                        success: result.success,
+                                        output: result.output || result.error,
+                                        duration: Math.floor((Date.now() - startTime) / results.length)
+                                    });
+                                    
+                                    res.write(`data: ${JSON.stringify({ 
+                                        type: result.success ? 'step-complete' : 'step-error', 
+                                        message: result.output || result.error,
+                                        step: `${subDeployment.name}/${step.name}`
+                                    })}\n\n`);
+                                    
+                                    if (!result.success && !step.continueOnError) {
+                                        deploymentSuccess = false;
+                                        throw new Error(`Step failed: ${subDeployment.name}/${step.name}`);
+                                    }
+                                });
+                            } catch (error) {
                                 deploymentSuccess = false;
-                                throw new Error(`Step failed: ${subDeployment.name}/${step.name}`);
+                                throw error;
+                            }
+                        } else {
+                            // Use regular executor (one connection per step)
+                            const executor = new PipelineExecutor(sshConfig, subDeployment.remotePath);
+                            
+                            for (const step of subDeployment.deploymentSteps) {
+                                const stepStartTime = Date.now();
+                                
+                                res.write(`data: ${JSON.stringify({ 
+                                    type: 'step', 
+                                    message: `[${subDeployment.name}/Remote] Running: ${step.name}` 
+                                })}\n\n`);
+                                
+                                const result = await executor.executeStep(step);
+                                
+                                deploymentSteps.push({
+                                    name: `[${subDeployment.name}] ${step.name}`,
+                                    success: result.success,
+                                    output: result.output || result.error,
+                                    duration: Date.now() - stepStartTime
+                                });
+                                
+                                res.write(`data: ${JSON.stringify({ 
+                                    type: result.success ? 'step-complete' : 'step-error', 
+                                    message: result.output || result.error,
+                                    step: `${subDeployment.name}/${step.name}`
+                                })}\n\n`);
+                                
+                                if (!result.success && !step.continueOnError) {
+                                    deploymentSuccess = false;
+                                    throw new Error(`Step failed: ${subDeployment.name}/${step.name}`);
+                                }
                             }
                         }
                     }
@@ -559,35 +605,77 @@ export function createAPIServer(port = 3000) {
 
             // Run deployment steps
             if (project.deploymentSteps.length > 0) {
-                const executor = new PipelineExecutor(project.ssh, project.remotePath);
-                
-                // Execute steps with progress updates
-                for (const step of project.deploymentSteps) {
-                    const stepStartTime = Date.now();
+                // Check if persistent sessions are enabled
+                if (project.persistentSession) {
+                    // Use persistent executor for all steps in one session
+                    const persistentExecutor = new PersistentPipelineExecutor(project.ssh, project.remotePath);
                     
                     res.write(`data: ${JSON.stringify({ 
-                        type: 'step', 
-                        message: `Running: ${step.name}` 
+                        type: 'info', 
+                        message: 'Using persistent SSH session for all steps' 
                     })}\n\n`);
                     
-                    const result = await executor.executeStep(step);
-                    
-                    deploymentSteps.push({
-                        name: step.name,
-                        success: result.success,
-                        output: result.output || result.error,
-                        duration: Date.now() - stepStartTime
-                    });
-                    
-                    res.write(`data: ${JSON.stringify({ 
-                        type: result.success ? 'step-complete' : 'step-error', 
-                        message: result.output || result.error,
-                        step: step.name
-                    })}\n\n`);
-                    
-                    if (!result.success && !step.continueOnError) {
+                    try {
+                        const startTime = Date.now();
+                        const results = await persistentExecutor.executeStepsInSession(project.deploymentSteps);
+                        
+                        results.forEach((result, index) => {
+                            const step = project.deploymentSteps[index];
+                            
+                            deploymentSteps.push({
+                                name: step.name,
+                                success: result.success,
+                                output: result.output || result.error,
+                                duration: Math.floor((Date.now() - startTime) / results.length)
+                            });
+                            
+                            res.write(`data: ${JSON.stringify({ 
+                                type: result.success ? 'step-complete' : 'step-error', 
+                                message: result.output || result.error,
+                                step: step.name
+                            })}\n\n`);
+                            
+                            if (!result.success && !step.continueOnError) {
+                                deploymentSuccess = false;
+                                throw new Error(`Step failed: ${step.name}`);
+                            }
+                        });
+                    } catch (error) {
                         deploymentSuccess = false;
-                        throw new Error(`Step failed: ${step.name}`);
+                        throw error;
+                    }
+                } else {
+                    // Use regular executor (one connection per step)
+                    const executor = new PipelineExecutor(project.ssh, project.remotePath);
+                    
+                    // Execute steps with progress updates
+                    for (const step of project.deploymentSteps) {
+                        const stepStartTime = Date.now();
+                        
+                        res.write(`data: ${JSON.stringify({ 
+                            type: 'step', 
+                            message: `Running: ${step.name}` 
+                        })}\n\n`);
+                        
+                        const result = await executor.executeStep(step);
+                        
+                        deploymentSteps.push({
+                            name: step.name,
+                            success: result.success,
+                            output: result.output || result.error,
+                            duration: Date.now() - stepStartTime
+                        });
+                        
+                        res.write(`data: ${JSON.stringify({ 
+                            type: result.success ? 'step-complete' : 'step-error', 
+                            message: result.output || result.error,
+                            step: step.name
+                        })}\n\n`);
+                        
+                        if (!result.success && !step.continueOnError) {
+                            deploymentSuccess = false;
+                            throw new Error(`Step failed: ${step.name}`);
+                        }
                     }
                 }
             }

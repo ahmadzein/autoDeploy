@@ -18,6 +18,7 @@ function EditSubDeployment() {
     relativePath: '',
     remotePath: '',
     inheritSSH: true,
+    persistentSession: false,
     ssh: {
       host: '',
       username: '',
@@ -77,6 +78,7 @@ function EditSubDeployment() {
         relativePath: subDeployment.relativePath || '',
         remotePath: subDeployment.remotePath,
         inheritSSH: !subDeployment.ssh || JSON.stringify(subDeployment.ssh) === JSON.stringify(projectData.ssh),
+        persistentSession: subDeployment.persistentSession || false,
         ssh: subDeployment.ssh || projectData.ssh,
         localSteps: subDeployment.localSteps || [],
         deploymentSteps: subDeployment.deploymentSteps || []
@@ -434,7 +436,7 @@ function EditSubDeployment() {
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">SSH Configuration</h3>
           
-          <div className="mb-4">
+          <div className="mb-4 space-y-3">
             <label className="flex items-center">
               <input
                 type="checkbox"
@@ -445,6 +447,22 @@ function EditSubDeployment() {
               />
               <span className="ml-2 text-sm text-gray-700">Use same SSH credentials as parent monorepo</span>
             </label>
+            
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                name="persistentSession"
+                checked={formData.persistentSession}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-700">
+                Use persistent SSH session (keeps connection alive between steps)
+              </span>
+            </label>
+            <p className="ml-6 text-xs text-gray-500">
+              Enable this for deployments that require nested SSH connections or maintaining state between steps
+            </p>
           </div>
           
           {!formData.inheritSSH && (

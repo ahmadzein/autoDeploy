@@ -13,6 +13,7 @@ function AddMonorepo() {
   const [formData, setFormData] = useState({
     name: '',
     localPath: '',
+    persistentSession: false,
     ssh: {
       host: '',
       username: '',
@@ -25,15 +26,17 @@ function AddMonorepo() {
   });
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
+    const inputValue = type === 'checkbox' ? checked : value;
+    
     if (name.startsWith('ssh.')) {
       const sshField = name.split('.')[1];
       setFormData(prev => ({
         ...prev,
-        ssh: { ...prev.ssh, [sshField]: value }
+        ssh: { ...prev.ssh, [sshField]: inputValue }
       }));
     } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData(prev => ({ ...prev, [name]: inputValue }));
     }
   };
 
@@ -168,6 +171,25 @@ function AddMonorepo() {
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">SSH Configuration</h3>
           <p className="text-sm text-gray-600 mb-4">Default SSH settings for all sub-deployments (can be overridden per sub-project)</p>
+          
+          {/* Persistent Session Option */}
+          <div className="mb-6">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                name="persistentSession"
+                checked={formData.persistentSession}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-700">
+                Use persistent SSH session (keeps connection alive between steps)
+              </span>
+            </label>
+            <p className="ml-6 mt-1 text-xs text-gray-500">
+              Enable this for deployments that require nested SSH connections or maintaining state between steps
+            </p>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
