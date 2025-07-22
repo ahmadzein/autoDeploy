@@ -57,6 +57,47 @@ Deploy selected sub-projects interactively:
 autodeploy deploy <monorepo-name>
 ```
 
+## GUI Features
+
+### Monorepo Management Interface
+The GUI provides comprehensive monorepo management capabilities:
+
+#### Creating Monorepos
+- Navigate to Projects → Add Project → Create Monorepo
+- Configure monorepo settings and SSH credentials
+- Set display name for user-friendly identification
+
+#### Managing Sub-Deployments
+- Click on monorepo project card to view sub-deployments
+- **Edit Monorepo Settings**: Click "Edit Settings" button to modify:
+  - Display name
+  - Local and remote paths
+  - SSH credentials
+  - Port forwarding options
+- Add new sub-deployments with dedicated form
+- Edit existing sub-deployments with:
+  - **Form Mode**: Inline step editing with pencil icon
+  - **JSON Mode**: Direct configuration editing
+  - Real-time validation
+  - Multiple edit modes (full, config only, steps only)
+
+#### Step Editing Features
+- **Inline Editing**: Click pencil icon on any step
+- Edit fields:
+  - Step name
+  - Command
+  - Working directory
+  - Continue on error flag
+  - Interactive flag
+- Save or cancel changes with dedicated buttons
+
+#### Deployment Interface
+- Visual sub-deployment selection
+- Deploy all or specific sub-deployments
+- Real-time deployment logs with color coding
+- Interactive prompt support for dynamic inputs
+- Deployment history tracking
+
 ## Commands Reference
 
 ### `autodeploy create-monorepo`

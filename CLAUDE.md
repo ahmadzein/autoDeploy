@@ -21,6 +21,9 @@ AutoDeploy is a secure local deployment automation tool that helps deploy projec
 10. **Separate Logs Storage**: Deployment logs now stored in separate logs.json file
 11. **Stateful SSH Sessions**: Maintain SSH session state for nested SSH scenarios
 12. **Interactive Prompt Support**: Handle dynamic user prompts during deployment
+13. **Inline Step Editing**: Edit deployment steps directly in the UI without JSON mode
+14. **Monorepo Settings Editing**: Edit monorepo project settings through EditProject component
+15. **Display Name Consistency**: Show user-friendly display names instead of slugs everywhere
 
 ### Configuration Structure Refactor
 
@@ -127,6 +130,34 @@ node src/config/migrate.js
 - Red border/dot for invalid JSON
 - Seamless switching between modes
 - Shows file location: `~/.autodeploy/projects/{projectName}/`
+- **NEW**: JSON mode now available for monorepo sub-deployments
+
+#### Inline Step Editing:
+- **NEW**: Edit deployment steps directly without switching to JSON mode
+- Click the edit icon (pencil) on any step to enter edit mode
+- Editable fields:
+  - Step name
+  - Command
+  - Working directory
+  - Continue on error flag
+  - Interactive flag
+- Save or cancel changes with dedicated buttons
+- Available in both EditProject and EditSubDeployment components
+
+#### Monorepo UI Enhancements:
+- **NEW**: Edit Settings button in SubDeployments view
+- Monorepo projects can be edited using the same EditProject component
+- All monorepo settings are now editable through the UI
+- Sub-deployment editing supports both form and JSON modes
+
+#### Display Name Consistency:
+- **NEW**: All views now show user-friendly display names instead of slugs
+- Automatic fallback to slug if display name not set
+- Consistent experience across:
+  - Project lists
+  - Edit forms
+  - Sub-deployment views
+  - Deployment views
 
 #### Contrast and UI Improvements:
 - Fixed low contrast issues throughout the app
@@ -412,6 +443,10 @@ gui/src/
 - [ ] Script completion detection works correctly
 - [ ] User input is properly sent to deployment scripts
 - [ ] Prompt UI shows with correct styling
+- [ ] Inline step editing works in both form views
+- [ ] Monorepo settings can be edited through EditProject
+- [ ] JSON mode works for sub-deployments
+- [ ] Display names show correctly in all views
 
 ## Future Enhancements
 

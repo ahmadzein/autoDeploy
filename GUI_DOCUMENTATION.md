@@ -123,17 +123,33 @@ The dashboard provides an at-a-glance view of your deployment infrastructure:
 
 #### Editing Projects
 - Access via settings icon on project card
-- Modify all project settings
-- Add, remove, or reorder deployment steps
-- Drag-and-drop step reordering with move up/down buttons
+- Modify all project settings including display name
+- **Form Mode Editing**:
+  - Inline step editing - click pencil icon to edit steps in place
+  - Edit step name, command, working directory
+  - Toggle continue on error and interactive flags
+  - Add, remove, or reorder deployment steps
+  - Move steps up/down with arrow buttons
+- **JSON Mode Editing**:
+  - Toggle between Form and JSON modes
+  - Edit full config, config only, local steps, or remote steps
+  - Real-time JSON validation with visual indicators
+  - File location shown for reference
 - Test connection after changes
+- Works for both regular projects and monorepos
 
 #### Monorepo Management
 - **Create Monorepo**: Special project type for multiple sub-deployments
-- **Sub-deployment Management**: Add, edit, and manage individual sub-projects
+- **Edit Monorepo Settings**: Click "Edit Settings" in sub-deployments view
+- **Sub-deployment Management**: 
+  - Add, edit, and manage individual sub-projects
+  - Full form and JSON editing modes for sub-deployments
+  - Inline step editing for sub-deployment steps
+  - Override SSH credentials per sub-deployment
 - **Coordinated Deployment**: Deploy all sub-projects or selected ones
 - **Individual SSH Settings**: Override SSH credentials per sub-deployment
 - **Step Inheritance**: Configure deployment steps for each sub-project
+- **Display Names**: All views show user-friendly names with fallback to slugs
 
 #### Project Duplication
 - **Clone Projects**: Duplicate existing projects with new names
