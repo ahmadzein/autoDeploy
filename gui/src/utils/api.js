@@ -153,6 +153,12 @@ export const deploymentAPI = {
     
     return eventSource;
   },
+  
+  // Send input for interactive prompts
+  sendDeploymentInput: async (projectName, data) => {
+    const response = await api.post(`/deployments/${projectName}/input`, data);
+    return response.data;
+  },
 };
 
 // Pipeline management

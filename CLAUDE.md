@@ -19,6 +19,8 @@ AutoDeploy is a secure local deployment automation tool that helps deploy projec
 8. **Deployments Today Fix**: Correctly count all deployments from today
 9. **Deployment History Fix**: Fixed history recording for both single and monorepo projects
 10. **Separate Logs Storage**: Deployment logs now stored in separate logs.json file
+11. **Stateful SSH Sessions**: Maintain SSH session state for nested SSH scenarios
+12. **Interactive Prompt Support**: Handle dynamic user prompts during deployment
 
 ### Configuration Structure Refactor
 
@@ -219,6 +221,80 @@ ssh: {
 - Displays individual step durations
 - Total deployment time in completion message
 - Deployment history section with last 10 deployments
+- **Interactive Prompt UI**: Dynamic input fields for deployment prompts
+- **Real-time prompt detection**: Automatic detection of script questions
+
+### 8. Stateful SSH Sessions
+
+#### Overview
+The StatefulSSHExecutor class maintains persistent SSH sessions across multiple deployment steps, crucial for nested SSH scenarios where subsequent commands need the context from previous commands.
+
+#### Key Features:
+- **Persistent Shell Sessions**: Uses SSH2's shell() method instead of exec()
+- **Session State Maintenance**: Preserves environment and directory context
+- **Interactive Prompt Detection**: Identifies and handles user prompts
+- **Real-time Output Streaming**: Streams output via EventEmitter
+- **Script Completion Detection**: Recognizes natural script endings
+- **Timeout Protection**: 30-second timeout with activity tracking
+
+#### Implementation:
+```javascript
+// Located in src/pipeline/executor-stateful-ssh.js
+export class StatefulSSHExecutor extends EventEmitter {
+  constructor(sshConfig, projectPath) {
+    super();
+    this.sshConfig = sshConfig;
+    this.projectPath = projectPath;
+    this.currentStream = null;
+    this.commandQueue = [];
+    this.waitingForUserInput = false;
+    this.sessionId = null;
+  }
+  
+  handleUserInput(input) {
+    if (this.waitingForUserInput && this.currentStream) {
+      this.currentStream.write(input + '\n');
+      this.waitingForUserInput = false;
+      return true;
+    }
+    return false;
+  }
+}
+```
+
+#### Usage Scenarios:
+1. **Nested SSH**: SSH to jump server, then SSH to target server
+2. **Interactive Scripts**: Scripts that prompt for branch names, versions, etc.
+3. **Environment-dependent Commands**: Commands that rely on previous cd or export
+4. **Long-running Scripts**: Deployment scripts with multiple interactive steps
+
+### 9. Interactive Prompt Support
+
+#### GUI Implementation:
+- **Prompt Detection**: Real-time detection of interactive prompts
+- **User Input UI**: Yellow-highlighted prompt with input field
+- **Async Communication**: WebSocket-like input handling via SSE
+- **Context Preservation**: Maintains session ID for input routing
+
+#### CLI Implementation:
+- **Readline Interface**: Terminal-based prompt handling
+- **Colored Prompts**: Yellow prompts with cyan input indicators
+- **Synchronous Flow**: Waits for user input before proceeding
+
+#### Prompt Patterns Detected:
+- Questions ending with `?`
+- Common prompts: `Enter:`, `Type:`, `Choose:`, `Select:`
+- Yes/No prompts: `(y/n)`, `(yes/no)`
+- Password prompts: `password:`, `passphrase:`
+- Custom patterns: `What branch/tag do you want to deploy?`
+
+#### Example Flow:
+```
+[PROMPT] What branch/tag do you want to deploy?
+> main
+[STATEFUL-SSH] Sending user input: main
+Deploying branch: main...
+```
 
 ## Architecture Details
 
@@ -262,6 +338,7 @@ gui/src/
 - `PUT /api/projects/:name` - Update project
 - `DELETE /api/projects/:name` - Delete project
 - `GET /api/deployments/:name` - Start deployment (SSE)
+- `POST /api/deployments/:name/input` - Send input for interactive prompts
 - `GET /api/projects/:name/deployments` - Get deployment history
 - `GET /api/stats` - Global deployment statistics
 - `GET /api/health` - Health check
@@ -299,6 +376,12 @@ gui/src/
 - Correctly shows "Deployments Today" on dashboard
 - Iterates through full history for accurate counts
 
+### Nested SSH Stuck Issues
+- Fixed by implementing StatefulSSHExecutor
+- Maintains shell session state between commands
+- No longer combines multiple commands into one
+- Each step executes sequentially in same session
+
 ## Testing Checklist
 
 - [ ] Local steps execute before remote steps
@@ -323,6 +406,12 @@ gui/src/
 - [ ] Deployment logs saved separately in logs.json
 - [ ] History command loads logs from separate file
 - [ ] Old deployments still work without logs.json
+- [ ] Stateful SSH maintains session between commands
+- [ ] Interactive prompts work in both GUI and CLI
+- [ ] Nested SSH commands execute properly
+- [ ] Script completion detection works correctly
+- [ ] User input is properly sent to deployment scripts
+- [ ] Prompt UI shows with correct styling
 
 ## Future Enhancements
 

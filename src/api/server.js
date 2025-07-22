@@ -10,6 +10,11 @@ import { SSHConnection } from '../ssh/connection.js';
 import { PipelineExecutor } from '../pipeline/executor.js';
 import { PersistentPipelineExecutor } from '../pipeline/executor-persistent.js';
 import { NestedSSHExecutor } from '../pipeline/executor-nested-ssh.js';
+import { InteractiveShellExecutor } from '../pipeline/executor-interactive-shell.js';
+import { SmartSSHExecutor } from '../pipeline/executor-smart-ssh.js';
+import { SimpleSSHExecutor } from '../pipeline/executor-simple-ssh.js';
+import { InteractivePipelineExecutor } from '../pipeline/executor-interactive.js';
+import { StatefulSSHExecutor } from '../pipeline/executor-stateful-ssh.js';
 import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -357,62 +362,80 @@ export function createAPIServer(port = 3000) {
                         console.log(`[DEBUG] Has nested SSH: ${hasNestedSSH}`);
                         console.log(`[DEBUG] Using persistent session: ${usePersistentSession}`);
                         
-                        if (hasNestedSSH) {
-                            // Use nested SSH executor for proper handling
-                            const nestedExecutor = new NestedSSHExecutor(sshConfig, subDeployment.remotePath);
+                        // Prefer persistent session over nested SSH detection when enabled
+                        if (usePersistentSession) {
+                            // Use stateful SSH executor that maintains session between commands
+                            const sessionId = `${project.name}-${subDeployment.name}-${Date.now()}`;
+                            const statefulExecutor = new StatefulSSHExecutor(sshConfig, subDeployment.remotePath);
+                            statefulExecutor.setSessionId(sessionId);
                             
                             res.write(`data: ${JSON.stringify({ 
                                 type: 'info', 
-                                message: `[${subDeployment.name}] Detected nested SSH commands, using optimized execution` 
+                                message: `[${subDeployment.name}] Using stateful SSH session for ${subDeployment.deploymentSteps.length} steps` 
                             })}\n\n`);
                             
-                            try {
-                                const results = await nestedExecutor.executeSteps(subDeployment.deploymentSteps);
-                                
-                                results.forEach((result) => {
-                                    deploymentSteps.push({
-                                        name: `[${subDeployment.name}] ${result.step}`,
-                                        success: result.success,
-                                        output: result.output || result.error,
-                                        duration: 0
-                                    });
-                                    
-                                    res.write(`data: ${JSON.stringify({ 
-                                        type: result.success ? 'step-complete' : 'step-error', 
-                                        message: result.output || result.error,
-                                        step: `${subDeployment.name}/${result.step}`
-                                    })}\n\n`);
-                                    
-                                    if (!result.success) {
-                                        deploymentSuccess = false;
-                                        throw new Error(`Step failed: ${subDeployment.name}/${result.step}`);
+                            // Listen for real-time output
+                            statefulExecutor.on('output', (data) => {
+                                const lines = data.data.split('\n');
+                                lines.forEach(line => {
+                                    if (line.trim()) {
+                                        res.write(`data: ${JSON.stringify({ 
+                                            type: 'output', 
+                                            data: line + '\n',
+                                            outputType: data.type || 'stdout'
+                                        })}\n\n`);
                                     }
                                 });
-                            } catch (error) {
-                                deploymentSuccess = false;
-                                throw error;
-                            }
-                        } else if (usePersistentSession) {
-                            // Use persistent executor for all steps in one session
-                            const persistentExecutor = new PersistentPipelineExecutor(sshConfig, subDeployment.remotePath);
+                            });
                             
-                            res.write(`data: ${JSON.stringify({ 
-                                type: 'info', 
-                                message: `[${subDeployment.name}] Using persistent SSH session for ${subDeployment.deploymentSteps.length} steps` 
-                            })}\n\n`);
+                            // Listen for prompts
+                            statefulExecutor.on('prompt', (promptData) => {
+                                res.write(`data: ${JSON.stringify({ 
+                                    type: 'prompt', 
+                                    sessionId: promptData.sessionId,
+                                    step: promptData.step,
+                                    prompt: promptData.prompt
+                                })}\n\n`);
+                                
+                                // Store executor in global sessions for input handling
+                                if (!global.deploymentSessions) {
+                                    global.deploymentSessions = new Map();
+                                }
+                                
+                                global.deploymentSessions.set(sessionId, {
+                                    waitingForInput: true,
+                                    inputCallback: (input) => {
+                                        statefulExecutor.handleUserInput(input);
+                                    }
+                                });
+                                
+                                // Clean up after 5 minutes
+                                setTimeout(() => {
+                                    global.deploymentSessions.delete(sessionId);
+                                }, 300000);
+                            });
                             
                             try {
                                 const startTime = Date.now();
-                                const results = await persistentExecutor.executeStepsInSession(subDeployment.deploymentSteps);
+                                const results = await statefulExecutor.executeSteps(subDeployment.deploymentSteps);
+                                
+                                // Remove event listeners
+                                statefulExecutor.removeAllListeners();
                                 
                                 results.forEach((result, index) => {
                                     const step = subDeployment.deploymentSteps[index];
+                                    
+                                    // Skip if we don't have a corresponding step (can happen with interactive sessions)
+                                    if (!step) {
+                                        console.warn(`[API] No step found for result at index ${index}`);
+                                        return;
+                                    }
                                     
                                     deploymentSteps.push({
                                         name: `[${subDeployment.name}] ${step.name}`,
                                         success: result.success,
                                         output: result.output || result.error,
-                                        duration: Math.floor((Date.now() - startTime) / results.length)
+                                        duration: result.duration || Math.floor((Date.now() - startTime) / results.length)
                                     });
                                     
                                     res.write(`data: ${JSON.stringify({ 
@@ -431,8 +454,9 @@ export function createAPIServer(port = 3000) {
                                 throw error;
                             }
                         } else {
-                            // Use regular executor (one connection per step)
-                            const executor = new PipelineExecutor(sshConfig, subDeployment.remotePath);
+                            // Use interactive executor for better prompt handling
+                            const sessionId = `${project.name}-${subDeployment.name}-${Date.now()}`;
+                            const executor = new InteractivePipelineExecutor(sshConfig, subDeployment.remotePath);
                             
                             for (const step of subDeployment.deploymentSteps) {
                                 const stepStartTime = Date.now();
@@ -442,7 +466,43 @@ export function createAPIServer(port = 3000) {
                                     message: `[${subDeployment.name}/Remote] Running: ${step.name}` 
                                 })}\n\n`);
                                 
-                                const result = await executor.executeStep(step);
+                                // Set up interactive handling
+                                executor.on('output', (data) => {
+                                    res.write(`data: ${JSON.stringify({ 
+                                        type: 'output', 
+                                        data: data.data,
+                                        outputType: data.type 
+                                    })}\n\n`);
+                                });
+                                
+                                executor.on('prompt', (promptData) => {
+                                    res.write(`data: ${JSON.stringify({ 
+                                        type: 'prompt', 
+                                        sessionId: sessionId,
+                                        step: `${subDeployment.name}/${promptData.step}`,
+                                        prompt: promptData.prompt
+                                    })}\n\n`);
+                                });
+                                
+                                const result = await executor.executeStep(step, (prompt, callback) => {
+                                    if (!global.deploymentSessions) {
+                                        global.deploymentSessions = new Map();
+                                    }
+                                    
+                                    global.deploymentSessions.set(sessionId, {
+                                        waitingForInput: true,
+                                        inputCallback: (input) => {
+                                            callback(input);
+                                            global.deploymentSessions.get(sessionId).waitingForInput = false;
+                                        }
+                                    });
+                                    
+                                    setTimeout(() => {
+                                        global.deploymentSessions.delete(sessionId);
+                                    }, 300000);
+                                });
+                                
+                                executor.removeAllListeners();
                                 
                                 deploymentSteps.push({
                                     name: `[${subDeployment.name}] ${step.name}`,
@@ -651,28 +711,84 @@ export function createAPIServer(port = 3000) {
 
             // Run deployment steps
             if (project.deploymentSteps.length > 0) {
-                // Check if persistent sessions are enabled
-                if (project.persistentSession) {
-                    // Use persistent executor for all steps in one session
-                    const persistentExecutor = new PersistentPipelineExecutor(project.ssh, project.remotePath);
+                // Check if persistent sessions are enabled or if we have nested SSH
+                const hasNestedSSH = project.deploymentSteps.some(step => 
+                    step.command.trim().match(/^ssh\s+[^\s]+\s*$/)
+                );
+                
+                if (project.persistentSession || hasNestedSSH) {
+                    // Use stateful SSH executor that maintains session between commands
+                    const sessionId = `${project.name}-${Date.now()}`;
+                    const statefulExecutor = new StatefulSSHExecutor(project.ssh, project.remotePath);
+                    statefulExecutor.setSessionId(sessionId);
                     
                     res.write(`data: ${JSON.stringify({ 
                         type: 'info', 
-                        message: 'Using persistent SSH session for all steps' 
+                        message: 'Using stateful SSH session for all steps' 
                     })}\n\n`);
+                    
+                    // Listen for real-time output
+                    statefulExecutor.on('output', (data) => {
+                        const lines = data.data.split('\n');
+                        lines.forEach(line => {
+                            if (line.trim()) {
+                                res.write(`data: ${JSON.stringify({ 
+                                    type: 'output', 
+                                    data: line + '\n',
+                                    outputType: data.type || 'stdout'
+                                })}\n\n`);
+                            }
+                        });
+                    });
+                    
+                    // Listen for prompts
+                    statefulExecutor.on('prompt', (promptData) => {
+                        res.write(`data: ${JSON.stringify({ 
+                            type: 'prompt', 
+                            sessionId: promptData.sessionId,
+                            step: promptData.step,
+                            prompt: promptData.prompt
+                        })}\n\n`);
+                        
+                        // Store executor in global sessions for input handling
+                        if (!global.deploymentSessions) {
+                            global.deploymentSessions = new Map();
+                        }
+                        
+                        global.deploymentSessions.set(sessionId, {
+                            waitingForInput: true,
+                            inputCallback: (input) => {
+                                statefulExecutor.handleUserInput(input);
+                            }
+                        });
+                        
+                        // Clean up after 5 minutes
+                        setTimeout(() => {
+                            global.deploymentSessions.delete(sessionId);
+                        }, 300000);
+                    });
                     
                     try {
                         const startTime = Date.now();
-                        const results = await persistentExecutor.executeStepsInSession(project.deploymentSteps);
+                        const results = await statefulExecutor.executeSteps(project.deploymentSteps);
+                        
+                        // Remove event listeners
+                        statefulExecutor.removeAllListeners();
                         
                         results.forEach((result, index) => {
                             const step = project.deploymentSteps[index];
+                            
+                            // Skip if we don't have a corresponding step
+                            if (!step) {
+                                console.warn(`[API] No step found for result at index ${index}`);
+                                return;
+                            }
                             
                             deploymentSteps.push({
                                 name: step.name,
                                 success: result.success,
                                 output: result.output || result.error,
-                                duration: Math.floor((Date.now() - startTime) / results.length)
+                                duration: result.duration || Math.floor((Date.now() - startTime) / results.length)
                             });
                             
                             res.write(`data: ${JSON.stringify({ 
@@ -691,8 +807,11 @@ export function createAPIServer(port = 3000) {
                         throw error;
                     }
                 } else {
-                    // Use regular executor (one connection per step)
-                    const executor = new PipelineExecutor(project.ssh, project.remotePath);
+                    // Generate session ID for interactive prompts
+                    const sessionId = `${project.name}-${Date.now()}`;
+                    
+                    // Use interactive executor for better prompt handling
+                    const executor = new InteractivePipelineExecutor(project.ssh, project.remotePath);
                     
                     // Execute steps with progress updates
                     for (const step of project.deploymentSteps) {
@@ -703,7 +822,49 @@ export function createAPIServer(port = 3000) {
                             message: `Running: ${step.name}` 
                         })}\n\n`);
                         
-                        const result = await executor.executeStep(step);
+                        // Set up interactive handling
+                        executor.on('output', (data) => {
+                            // Stream output in real-time
+                            res.write(`data: ${JSON.stringify({ 
+                                type: 'output', 
+                                data: data.data,
+                                outputType: data.type 
+                            })}\n\n`);
+                        });
+                        
+                        executor.on('prompt', (promptData) => {
+                            // Send prompt to client
+                            res.write(`data: ${JSON.stringify({ 
+                                type: 'prompt', 
+                                sessionId: sessionId,
+                                step: promptData.step,
+                                prompt: promptData.prompt
+                            })}\n\n`);
+                        });
+                        
+                        // Create promise for handling prompts
+                        const result = await executor.executeStep(step, (prompt, callback) => {
+                            // Store callback in session
+                            if (!global.deploymentSessions) {
+                                global.deploymentSessions = new Map();
+                            }
+                            
+                            global.deploymentSessions.set(sessionId, {
+                                waitingForInput: true,
+                                inputCallback: (input) => {
+                                    callback(input);
+                                    global.deploymentSessions.get(sessionId).waitingForInput = false;
+                                }
+                            });
+                            
+                            // Clean up after 5 minutes
+                            setTimeout(() => {
+                                global.deploymentSessions.delete(sessionId);
+                            }, 300000);
+                        });
+                        
+                        // Remove listeners
+                        executor.removeAllListeners();
                         
                         deploymentSteps.push({
                             name: step.name,
@@ -894,6 +1055,25 @@ export function createAPIServer(port = 3000) {
             res.sendFile(fullPath);
         } catch (error) {
             res.status(404).json({ error: 'Documentation not found' });
+        }
+    });
+
+    // Interactive deployment endpoint (with WebSocket-like bidirectional communication)
+    app.post('/api/deployments/:name/input', async (req, res) => {
+        const projectName = decodeURIComponent(req.params.name);
+        const { input, sessionId } = req.body;
+        
+        // Store input responses in a global map (in production, use Redis or similar)
+        if (!global.deploymentSessions) {
+            global.deploymentSessions = new Map();
+        }
+        
+        const session = global.deploymentSessions.get(sessionId);
+        if (session && session.waitingForInput) {
+            session.inputCallback(input);
+            res.json({ success: true });
+        } else {
+            res.status(400).json({ error: 'No active prompt waiting for input' });
         }
     });
 

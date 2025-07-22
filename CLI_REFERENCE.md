@@ -1,5 +1,28 @@
 # AutoDeploy CLI Reference
 
+## Interactive Deployment Features
+
+AutoDeploy CLI now supports interactive deployments with:
+- **Stateful SSH Sessions**: Maintains context between deployment steps
+- **Interactive Prompts**: Handles user input during deployment
+- **Real-time Output**: Streams deployment logs as they happen
+- **Colored Output**: Clear visual feedback with color-coded messages
+
+### Interactive Deployment Example
+```bash
+$ autodeploy deploy my-project
+
+🔄 Using stateful SSH session...
+[STEP] Connect to Jump Server
+[STEP] Deploy Application
+
+[PROMPT] What branch/tag do you want to deploy?
+> main
+
+Deploying branch: main...
+✓ Deployment completed successfully!
+```
+
 ## Table of Contents
 - [Global Options](#global-options)
 - [Commands](#commands)
@@ -111,6 +134,12 @@ autodeploy deploy [project-name] [options]
 - `--sub <name>` - Deploy specific sub-project (monorepo only)
 - `--skip-git` - Skip git commit/push (not recommended)
 
+**Features:**
+- **Stateful SSH Sessions**: Automatically enabled for nested SSH scenarios
+- **Interactive Prompts**: Handles deployment scripts that require user input
+- **Real-time Output**: Streams deployment logs with color coding
+- **Progress Tracking**: Shows elapsed time and step durations
+
 **Examples:**
 ```bash
 # Interactive project selection
@@ -124,6 +153,13 @@ autodeploy deploy my-platform --all
 
 # Deploy specific sub-project
 autodeploy deploy my-platform --sub frontend
+
+# Deploy with interactive prompts
+autodeploy deploy my-project
+# Output:
+# [PROMPT] What branch to deploy?
+# > main
+# Deploying branch: main...
 ```
 
 ### edit

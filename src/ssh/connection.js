@@ -49,21 +49,35 @@ export class SSHConnection {
         });
     }
 
-    exec(command) {
+    exec(command, options = {}) {
         return new Promise((resolve, reject) => {
+            const timeout = options.timeout || 30000; // Default 30 second timeout
+            let timeoutHandle = null;
+            let timedOut = false;
+            
             this.conn.exec(command, (err, stream) => {
                 if (err) return reject(err);
                 
                 let stdout = '';
                 let stderr = '';
                 
+                // Set timeout
+                timeoutHandle = setTimeout(() => {
+                    timedOut = true;
+                    stream.close();
+                    reject(new Error(`Command timed out after ${timeout/1000} seconds: ${command.substring(0, 100)}...`));
+                }, timeout);
+                
                 stream.on('close', (code, signal) => {
-                    resolve({
-                        code,
-                        stdout,
-                        stderr,
-                        signal
-                    });
+                    if (timeoutHandle) clearTimeout(timeoutHandle);
+                    if (!timedOut) {
+                        resolve({
+                            code,
+                            stdout,
+                            stderr,
+                            signal
+                        });
+                    }
                 }).on('data', (data) => {
                     stdout += data.toString();
                 }).stderr.on('data', (data) => {

@@ -9,6 +9,8 @@ import { ConfigManager } from '../config/manager.js';
 import { GitOperations } from '../git/operations.js';
 import { SSHConnection } from '../ssh/connection.js';
 import { PipelineExecutor } from '../pipeline/executor.js';
+import { StatefulSSHExecutor } from '../pipeline/executor-stateful-ssh.js';
+import readline from 'readline';
 import { startGUIService, startGUIProduction } from './gui-service.js';
 import { handleEditCommand } from './edit-command.js';
 import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
@@ -1114,8 +1116,53 @@ async function deployProject(project, configManager) {
         }
 
         if (project.deploymentSteps.length > 0) {
-            const executor = new PipelineExecutor(project.ssh, project.remotePath);
-            const results = await executor.execute(project.deploymentSteps);
+            // Check if we need stateful SSH (persistent session or nested SSH)
+            const hasNestedSSH = project.deploymentSteps.some(step => 
+                step.command.trim().match(/^ssh\s+[^\s]+\s*$/)
+            );
+            
+            let results;
+            
+            if (project.persistentSession || hasNestedSSH) {
+                console.log(chalk.yellow('\n🔄 Using stateful SSH session...\n'));
+                
+                const statefulExecutor = new StatefulSSHExecutor(project.ssh, project.remotePath);
+                
+                // Set up readline interface for interactive prompts
+                const rl = readline.createInterface({
+                    input: process.stdin,
+                    output: process.stdout
+                });
+                
+                // Handle prompts
+                statefulExecutor.on('prompt', async (promptData) => {
+                    console.log(chalk.yellow(`\n[PROMPT] ${promptData.prompt}`));
+                    
+                    const answer = await new Promise((resolve) => {
+                        rl.question(chalk.cyan('> '), (input) => {
+                            resolve(input);
+                        });
+                    });
+                    
+                    statefulExecutor.handleUserInput(answer);
+                });
+                
+                // Handle real-time output
+                statefulExecutor.on('output', (data) => {
+                    process.stdout.write(data.data);
+                });
+                
+                try {
+                    results = await statefulExecutor.executeSteps(project.deploymentSteps);
+                } finally {
+                    rl.close();
+                    statefulExecutor.removeAllListeners();
+                }
+            } else {
+                // Use regular executor
+                const executor = new PipelineExecutor(project.ssh, project.remotePath);
+                results = await executor.execute(project.deploymentSteps);
+            }
             
             // Record step results
             results.forEach((result, index) => {

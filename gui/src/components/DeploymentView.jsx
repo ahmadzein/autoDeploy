@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Play, Square, Terminal, Clock, CheckCircle, XCircle, AlertCircle, History, FolderTree } from 'lucide-react';
-import { projectAPI } from '../utils/api';
+import { projectAPI, deploymentAPI } from '../utils/api';
 
 function DeploymentView() {
   const { projectName } = useParams();
@@ -27,6 +27,9 @@ function DeploymentView() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [subDeployments, setSubDeployments] = useState([]);
   const [selectedSubs, setSelectedSubs] = useState([]);
+  const [promptData, setPromptData] = useState(null);
+  const [userInput, setUserInput] = useState('');
+  const promptInputRef = useRef(null);
 
   useEffect(() => {
     fetchProject();
@@ -190,6 +193,32 @@ function DeploymentView() {
             }
             setDeploymentStatus('success');
             break;
+          case 'output':
+            // Real-time output streaming
+            if (data.data) {
+              const lines = data.data.split('\n');
+              lines.forEach(line => {
+                if (line.trim()) {
+                  addLog(line, data.outputType === 'stderr' ? 'error-detail' : 'output');
+                }
+              });
+            }
+            break;
+          case 'prompt':
+            // Interactive prompt detected
+            addLog(`[PROMPT] ${data.prompt}`, 'prompt');
+            setPromptData({
+              sessionId: data.sessionId,
+              step: data.step,
+              prompt: data.prompt
+            });
+            // Focus input after state update
+            setTimeout(() => {
+              if (promptInputRef.current) {
+                promptInputRef.current.focus();
+              }
+            }, 100);
+            break;
           default:
             addLog(data.message || JSON.stringify(data), 'info');
         }
@@ -246,10 +275,35 @@ function DeploymentView() {
     setDeploymentStatus('idle');
     setElapsedTime(0);
     addLog('Deployment stopped by user', 'warning');
+    setPromptData(null);
     // Refresh history to show the stopped deployment
     setTimeout(() => {
       fetchDeploymentHistory();
     }, 500);
+  };
+
+  const handlePromptSubmit = async (e) => {
+    e.preventDefault();
+    if (!promptData || !userInput.trim()) return;
+
+    try {
+      addLog(`> ${userInput}`, 'user-input');
+      
+      // Send the input to the server
+      await deploymentAPI.sendDeploymentInput(projectName, {
+        sessionId: promptData.sessionId,
+        input: userInput
+      });
+      
+      // Clear the prompt
+      setPromptData(null);
+      setUserInput('');
+    } catch (err) {
+      console.error('Error sending input:', err);
+      addLog(`Failed to send input to server: ${err.response?.data?.error || err.message}`, 'error');
+      // Don't clear the input so user can try again
+      // setUserInput('');
+    }
   };
 
   const getLogClass = (type) => {
@@ -266,6 +320,10 @@ function DeploymentView() {
         return 'text-gray-400 ml-4';
       case 'error-detail':
         return 'text-red-300 ml-6 text-xs';
+      case 'prompt':
+        return 'text-yellow-300 font-semibold';
+      case 'user-input':
+        return 'text-cyan-400';
       default:
         return 'text-gray-300';
     }
@@ -594,6 +652,26 @@ function DeploymentView() {
                 <span className="text-gray-500">[{log.timestamp}]</span> {log.message}
               </div>
             ))
+          )}
+          {promptData && (
+            <form onSubmit={handlePromptSubmit} className="mt-4 flex items-center">
+              <span className="text-yellow-300 mr-2">?</span>
+              <input
+                ref={promptInputRef}
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="Enter your response..."
+                className="flex-1 bg-gray-800 text-gray-100 px-3 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="ml-2 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
+              >
+                Send
+              </button>
+            </form>
           )}
           {deploying && (
             <div className="inline-block animate-pulse">_</div>

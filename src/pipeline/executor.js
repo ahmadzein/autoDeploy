@@ -68,7 +68,13 @@ EOF`;
                         // Source .bashrc and .profile explicitly, then run command
                         const sourceFiles = 'source ~/.bashrc 2>/dev/null || true; source ~/.profile 2>/dev/null || true; source ~/.nvm/nvm.sh 2>/dev/null || true;';
                         
-                        if (!step.workingDir || step.workingDir === '.') {
+                        // Check if this is an SSH command - don't prepend cd for SSH commands
+                        const isSSHCommand = command.trim().match(/^ssh\s+/);
+                        
+                        if (isSSHCommand) {
+                            // For SSH commands, just run them directly without cd
+                            finalCommand = `bash -c '${sourceFiles} ${envVarsString}${escapedCommand}'`;
+                        } else if (!step.workingDir || step.workingDir === '.') {
                             finalCommand = `bash -c '${sourceFiles} ${envVarsString}cd ${this.projectPath} && ${escapedCommand}'`;
                         } else {
                             finalCommand = `bash -c '${sourceFiles} ${envVarsString}cd ${this.projectPath}/${step.workingDir} && ${escapedCommand}'`;
@@ -76,6 +82,9 @@ EOF`;
                     }
                     
                     // Execute the command
+                    if (process.env.AUTODEPLOY_DEBUG === 'true') {
+                        console.log(chalk.gray(`[EXECUTOR] Executing: ${finalCommand}`));
+                    }
                     const result = await connection.exec(finalCommand);
                     
                     if (result.code === 0) {
