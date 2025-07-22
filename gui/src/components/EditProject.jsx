@@ -195,24 +195,6 @@ function EditProject() {
     setEditingStepType(null);
   };
 
-  const updateStep = (index, type, field, value) => {
-    if (type === 'local') {
-      setFormData(prev => ({
-        ...prev,
-        localSteps: prev.localSteps.map((step, i) => 
-          i === index ? { ...step, [field]: value } : step
-        )
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        deploymentSteps: prev.deploymentSteps.map((step, i) => 
-          i === index ? { ...step, [field]: value } : step
-        )
-      }));
-    }
-  };
-
   const handleJsonChange = (e) => {
     setJsonContent(e.target.value);
   };
