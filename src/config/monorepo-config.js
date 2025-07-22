@@ -160,9 +160,8 @@ export class MonorepoConfig {
                     
                     // Update config if path was corrected
                     if (localPath !== config.localPath) {
-                            config.localPath = localPath;
-                            this.configManager.saveFile(configFile, config);
-                        }
+                        config.localPath = localPath;
+                        this.configManager.saveFile(configFile, config);
                     }
                     
                     // Load all sub-deployment files
