@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, Settings, Trash2, Play, ChevronRight, FolderTree, Copy } from 'lucide-react';
 import { projectAPI } from '../utils/api';
+import Breadcrumb from './Breadcrumb';
 
 function SubDeployments() {
   const { projectName } = useParams();
@@ -112,15 +113,17 @@ function SubDeployments() {
 
   return (
     <div>
+      {/* Breadcrumb */}
+      <Breadcrumb 
+        items={[
+          {
+            label: project?.displayName || project?.name || projectName,
+            href: null // Current page
+          }
+        ]} 
+      />
+      
       <div className="mb-8">
-        <button
-          onClick={() => navigate('/projects')}
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
-        >
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Back to Projects
-        </button>
-        
         <div className="flex justify-between items-start">
           <div className="flex items-center">
             <FolderTree className="h-8 w-8 text-purple-600 mr-3" />
@@ -130,13 +133,24 @@ function SubDeployments() {
             </div>
           </div>
           
-          <Link
-            to={`/projects/${projectName}/add-sub`}
-            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Add Sub-deployment
-          </Link>
+          <div className="flex items-center space-x-2">
+            {subDeployments.length > 0 && (
+              <Link
+                to={`/projects/${projectName}/deploy?all=true`}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                <Play className="h-5 w-5 mr-2" />
+                Deploy All
+              </Link>
+            )}
+            <Link
+              to={`/projects/${projectName}/add-sub`}
+              className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Add Sub-deployment
+            </Link>
+          </div>
         </div>
       </div>
 

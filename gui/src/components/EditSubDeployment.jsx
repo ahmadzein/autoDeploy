@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Code, Edit2, X, Check } from 'lucide-react';
 import { projectAPI } from '../utils/api';
+import Breadcrumb from './Breadcrumb';
 
 function EditSubDeployment() {
   const { projectName, subName } = useParams();
@@ -492,14 +493,21 @@ function EditSubDeployment() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Breadcrumb */}
+      <Breadcrumb 
+        items={[
+          {
+            label: project?.displayName || project?.name || projectName,
+            href: `/projects/${projectName}/sub-deployments`
+          },
+          {
+            label: subName,
+            href: null // Current page
+          }
+        ]} 
+      />
+      
       <div className="mb-8">
-        <button
-          onClick={() => navigate(`/projects/${projectName}/sub-deployments`)}
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
-        >
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Back to Sub-deployments
-        </button>
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Edit Sub-deployment</h2>
           <p className="mt-2 text-gray-600">Edit "{subName}" in {project?.displayName || projectName}</p>

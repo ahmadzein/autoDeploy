@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Play, Square, Terminal, Clock, CheckCircle, XCircle, AlertCircle, History, FolderTree } from 'lucide-react';
+import { ArrowLeft, Play, Square, Terminal, Clock, CheckCircle, XCircle, AlertCircle, History, FolderTree, Settings } from 'lucide-react';
 import { projectAPI, deploymentAPI } from '../utils/api';
+import Breadcrumb from './Breadcrumb';
 
 function DeploymentView() {
   const { projectName } = useParams();
@@ -358,22 +359,60 @@ function DeploymentView() {
     );
   }
 
+  // Build breadcrumb items
+  const breadcrumbItems = [];
+  
+  if (project) {
+    if (project.type === 'monorepo') {
+      breadcrumbItems.push({
+        label: project.displayName || project.name,
+        href: `/projects/${projectName}/sub-deployments`
+      });
+      
+      if (subDeployment) {
+        const sub = subDeployments.find(s => s.name === subDeployment);
+        breadcrumbItems.push({
+          label: sub?.name || subDeployment,
+          href: null // Current page
+        });
+      }
+    } else {
+      breadcrumbItems.push({
+        label: project.displayName || project.name,
+        href: null // Current page
+      });
+    }
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
+      
       {/* Header */}
       <div className="mb-8">
         <button
-          onClick={() => navigate('/projects')}
+          onClick={() => {
+            // If viewing a sub-deployment, go back to the parent monorepo
+            if (subDeployment && project.type === 'monorepo') {
+              navigate(`/projects/${projectName}/sub-deployments`);
+            } else {
+              navigate('/projects');
+            }
+          }}
           className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="h-5 w-5 mr-2" />
-          Back to Projects
+          {subDeployment && project.type === 'monorepo' ? 'Back to Monorepo' : 'Back to Projects'}
         </button>
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">
               Deploy {project.displayName || project.name}
-              {project.type === 'monorepo' && (
+              {subDeployment && (
+                <span className="text-gray-500 font-normal"> / {subDeployment}</span>
+              )}
+              {project.type === 'monorepo' && !subDeployment && (
                 <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
                   <FolderTree className="h-4 w-4 mr-1" />
                   Monorepo
@@ -384,6 +423,14 @@ function DeploymentView() {
           </div>
           <div className="flex items-center space-x-4">
             {getStatusIcon()}
+            <button
+              onClick={() => navigate(`/projects/${projectName}/edit`)}
+              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              title="Project Settings"
+            >
+              <Settings className="h-5 w-5 mr-2" />
+              Settings
+            </button>
             {deploying ? (
               <button
                 onClick={stopDeployment}

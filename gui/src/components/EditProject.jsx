@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Code, Edit2, X, Check } from 'lucide-react';
 import { projectAPI } from '../utils/api';
+import Breadcrumb from './Breadcrumb';
 
 function EditProject() {
   const { projectName } = useParams();
@@ -326,14 +327,21 @@ function EditProject() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Breadcrumb */}
+      <Breadcrumb 
+        items={[
+          {
+            label: formData.displayName || formData.name || projectName,
+            href: formData.type === 'monorepo' ? `/projects/${projectName}/sub-deployments` : null
+          },
+          {
+            label: 'Settings',
+            href: null // Current page
+          }
+        ]} 
+      />
+      
       <div className="mb-8">
-        <button
-          onClick={() => navigate('/projects')}
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
-        >
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Back to Projects
-        </button>
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">Edit Project</h2>
