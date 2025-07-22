@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Code } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Code, Edit2, X, Check } from 'lucide-react';
 import { projectAPI } from '../utils/api';
 
 function EditSubDeployment() {
@@ -16,6 +16,8 @@ function EditSubDeployment() {
   const [editMode, setEditMode] = useState('full'); // 'full', 'config', 'local', 'remote'
   const [jsonContent, setJsonContent] = useState('');
   const [jsonError, setJsonError] = useState(null);
+  const [editingStepIndex, setEditingStepIndex] = useState(null);
+  const [editingStepType, setEditingStepType] = useState(null); // 'local' or 'remote'
   
   const [formData, setFormData] = useState({
     name: '',
@@ -299,6 +301,35 @@ function EditSubDeployment() {
       ...prev,
       envVars: prev.envVars.filter((_, i) => i !== index)
     }));
+  };
+
+  // Edit step functions
+  const startEditingStep = (index, type) => {
+    setEditingStepIndex(index);
+    setEditingStepType(type);
+  };
+
+  const cancelEditingStep = () => {
+    setEditingStepIndex(null);
+    setEditingStepType(null);
+  };
+
+  const updateStep = (index, type, field, value) => {
+    if (type === 'local') {
+      setFormData(prev => ({
+        ...prev,
+        localSteps: prev.localSteps.map((step, i) => 
+          i === index ? { ...step, [field]: value } : step
+        )
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        deploymentSteps: prev.deploymentSteps.map((step, i) => 
+          i === index ? { ...step, [field]: value } : step
+        )
+      }));
+    }
   };
 
   const handleTestConnection = async () => {
@@ -825,51 +856,132 @@ function EditSubDeployment() {
           {formData.localSteps.length > 0 && (
             <div className="space-y-3 mb-6">
               {formData.localSteps.map((step, index) => (
-                <div key={index} className="flex items-center p-3 bg-gray-50 rounded-md">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{step.name}</p>
-                    <p className="text-sm text-gray-600 font-mono">{step.command}</p>
-                    <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
-                      <span>Working dir: {step.workingDir}</span>
-                      {step.interactive && (
-                        <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Interactive</span>
-                      )}
-                      {step.envVars && step.envVars.length > 0 && (
-                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{step.envVars.length} env vars</span>
-                      )}
-                      {step.inputs && step.inputs.length > 0 && (
-                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{step.inputs.length} inputs</span>
-                      )}
+                <div key={index} className="p-3 bg-gray-50 rounded-md">
+                  {editingStepIndex === index && editingStepType === 'local' ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          value={step.name}
+                          onChange={(e) => updateStep(index, 'local', 'name', e.target.value)}
+                          placeholder="Step name"
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                        />
+                        <input
+                          type="text"
+                          value={step.workingDir}
+                          onChange={(e) => updateStep(index, 'local', 'workingDir', e.target.value)}
+                          placeholder="Working directory"
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                        />
+                      </div>
+                      <textarea
+                        value={step.command}
+                        onChange={(e) => updateStep(index, 'local', 'command', e.target.value)}
+                        placeholder="Command to run"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm focus:ring-purple-500 focus:border-purple-500"
+                        rows="2"
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={step.continueOnError || false}
+                              onChange={(e) => updateStep(index, 'local', 'continueOnError', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Continue on error</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={step.interactive || false}
+                              onChange={(e) => updateStep(index, 'local', 'interactive', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Interactive</span>
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => cancelEditingStep()}
+                            className="text-gray-600 hover:text-gray-700"
+                            title="Cancel"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cancelEditingStep()}
+                            className="text-green-600 hover:text-green-700"
+                            title="Save"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center ml-4 space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => moveLocalStep(index, -1)}
-                      disabled={index === 0}
-                      className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                      title="Move up"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveLocalStep(index, 1)}
-                      disabled={index === formData.localSteps.length - 1}
-                      className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                      title="Move down"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeLocalStep(index)}
-                      className="text-red-600 hover:text-red-700"
-                      title="Delete step"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{step.name}</p>
+                        <p className="text-sm text-gray-600 font-mono">{step.command}</p>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
+                          <span>Working dir: {step.workingDir}</span>
+                          {step.continueOnError && (
+                            <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Continue on error</span>
+                          )}
+                          {step.interactive && (
+                            <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Interactive</span>
+                          )}
+                          {step.envVars && step.envVars.length > 0 && (
+                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{step.envVars.length} env vars</span>
+                          )}
+                          {step.inputs && step.inputs.length > 0 && (
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{step.inputs.length} inputs</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center ml-4 space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditingStep(index, 'local')}
+                          className="text-gray-400 hover:text-gray-600"
+                          title="Edit step"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveLocalStep(index, -1)}
+                          disabled={index === 0}
+                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveLocalStep(index, 1)}
+                          disabled={index === formData.localSteps.length - 1}
+                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeLocalStep(index)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Delete step"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -952,51 +1064,132 @@ function EditSubDeployment() {
           {formData.deploymentSteps.length > 0 && (
             <div className="space-y-3 mb-6">
               {formData.deploymentSteps.map((step, index) => (
-                <div key={index} className="flex items-center p-3 bg-gray-50 rounded-md">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{step.name}</p>
-                    <p className="text-sm text-gray-600 font-mono">{step.command}</p>
-                    <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
-                      <span>Working dir: {step.workingDir}</span>
-                      {step.interactive && (
-                        <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Interactive</span>
-                      )}
-                      {step.envVars && step.envVars.length > 0 && (
-                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{step.envVars.length} env vars</span>
-                      )}
-                      {step.inputs && step.inputs.length > 0 && (
-                        <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{step.inputs.length} inputs</span>
-                      )}
+                <div key={index} className="p-3 bg-gray-50 rounded-md">
+                  {editingStepIndex === index && editingStepType === 'remote' ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          value={step.name}
+                          onChange={(e) => updateStep(index, 'remote', 'name', e.target.value)}
+                          placeholder="Step name"
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                        />
+                        <input
+                          type="text"
+                          value={step.workingDir}
+                          onChange={(e) => updateStep(index, 'remote', 'workingDir', e.target.value)}
+                          placeholder="Working directory"
+                          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                        />
+                      </div>
+                      <textarea
+                        value={step.command}
+                        onChange={(e) => updateStep(index, 'remote', 'command', e.target.value)}
+                        placeholder="Command to run"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm focus:ring-purple-500 focus:border-purple-500"
+                        rows="2"
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={step.continueOnError || false}
+                              onChange={(e) => updateStep(index, 'remote', 'continueOnError', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Continue on error</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={step.interactive || false}
+                              onChange={(e) => updateStep(index, 'remote', 'interactive', e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Interactive</span>
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => cancelEditingStep()}
+                            className="text-gray-600 hover:text-gray-700"
+                            title="Cancel"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cancelEditingStep()}
+                            className="text-green-600 hover:text-green-700"
+                            title="Save"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center ml-4 space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => moveRemoteStep(index, -1)}
-                      disabled={index === 0}
-                      className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                      title="Move up"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveRemoteStep(index, 1)}
-                      disabled={index === formData.deploymentSteps.length - 1}
-                      className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                      title="Move down"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeRemoteStep(index)}
-                      className="text-red-600 hover:text-red-700"
-                      title="Delete step"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">{step.name}</p>
+                        <p className="text-sm text-gray-600 font-mono">{step.command}</p>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
+                          <span>Working dir: {step.workingDir}</span>
+                          {step.continueOnError && (
+                            <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Continue on error</span>
+                          )}
+                          {step.interactive && (
+                            <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Interactive</span>
+                          )}
+                          {step.envVars && step.envVars.length > 0 && (
+                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{step.envVars.length} env vars</span>
+                          )}
+                          {step.inputs && step.inputs.length > 0 && (
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{step.inputs.length} inputs</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center ml-4 space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditingStep(index, 'remote')}
+                          className="text-gray-400 hover:text-gray-600"
+                          title="Edit step"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveRemoteStep(index, -1)}
+                          disabled={index === 0}
+                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveRemoteStep(index, 1)}
+                          disabled={index === formData.deploymentSteps.length - 1}
+                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeRemoteStep(index)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Delete step"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

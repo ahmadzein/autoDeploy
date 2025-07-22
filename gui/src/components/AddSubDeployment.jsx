@@ -346,7 +346,7 @@ function AddSubDeployment() {
         </button>
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Add Sub-deployment</h2>
-          <p className="mt-2 text-gray-600">Add a new sub-project to {projectName}</p>
+          <p className="mt-2 text-gray-600">Add a new sub-project to {project?.displayName || projectName}</p>
         </div>
       </div>
 

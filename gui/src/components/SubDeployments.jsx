@@ -125,7 +125,7 @@ function SubDeployments() {
           <div className="flex items-center">
             <FolderTree className="h-8 w-8 text-purple-600 mr-3" />
             <div>
-              <h2 className="text-3xl font-bold text-gray-900">{project?.name}</h2>
+              <h2 className="text-3xl font-bold text-gray-900">{project?.displayName || project?.name}</h2>
               <p className="mt-2 text-gray-600">Manage sub-deployments for this monorepo</p>
             </div>
           </div>
@@ -142,7 +142,16 @@ function SubDeployments() {
 
       {/* Project Info */}
       <div className="bg-white shadow rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Monorepo Configuration</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Monorepo Configuration</h3>
+          <Link
+            to={`/projects/edit/${projectName}`}
+            className="inline-flex items-center px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            <Settings className="h-4 w-4 mr-1" />
+            Edit Settings
+          </Link>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-sm text-gray-600">Local Path</p>

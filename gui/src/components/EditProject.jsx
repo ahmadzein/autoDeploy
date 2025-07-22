@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Code } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Code, Edit2, X, Check } from 'lucide-react';
 import { projectAPI } from '../utils/api';
 
 function EditProject() {
@@ -43,6 +43,8 @@ function EditProject() {
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonContent, setJsonContent] = useState('');
   const [jsonEditMode, setJsonEditMode] = useState('full'); // 'full', 'config', 'local-steps', 'remote-steps'
+  const [editingStepIndex, setEditingStepIndex] = useState(null);
+  const [editingStepType, setEditingStepType] = useState(null); // 'local' or 'remote'
 
   useEffect(() => {
     fetchProject();
@@ -179,6 +181,35 @@ function EditProject() {
     if (newIndex >= 0 && newIndex < steps.length) {
       [steps[index], steps[newIndex]] = [steps[newIndex], steps[index]];
       setFormData(prev => ({ ...prev, localSteps: steps }));
+    }
+  };
+
+  // Edit step functions
+  const startEditingStep = (index, type) => {
+    setEditingStepIndex(index);
+    setEditingStepType(type);
+  };
+
+  const cancelEditingStep = () => {
+    setEditingStepIndex(null);
+    setEditingStepType(null);
+  };
+
+  const updateStep = (index, type, field, value) => {
+    if (type === 'local') {
+      setFormData(prev => ({
+        ...prev,
+        localSteps: prev.localSteps.map((step, i) => 
+          i === index ? { ...step, [field]: value } : step
+        )
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        deploymentSteps: prev.deploymentSteps.map((step, i) => 
+          i === index ? { ...step, [field]: value } : step
+        )
+      }));
     }
   };
 
