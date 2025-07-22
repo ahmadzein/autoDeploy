@@ -136,7 +136,7 @@ function SubDeployments() {
           <div className="flex items-center space-x-2">
             {subDeployments.length > 0 && (
               <Link
-                to={`/projects/${projectName}/deploy?all=true`}
+                to={`/deployments/${projectName}?all=true`}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
                 <Play className="h-5 w-5 mr-2" />

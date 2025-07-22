@@ -424,7 +424,7 @@ function DeploymentView() {
           <div className="flex items-center space-x-4">
             {getStatusIcon()}
             <button
-              onClick={() => navigate(`/projects/${projectName}/edit`)}
+              onClick={() => navigate(`/projects/edit/${projectName}`)}
               className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
               title="Project Settings"
             >
