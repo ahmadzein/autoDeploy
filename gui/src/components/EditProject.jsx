@@ -324,7 +324,7 @@ function EditProject() {
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">Edit Project</h2>
-            <p className="mt-2 text-gray-600">Update project configuration for {projectName}</p>
+            <p className="mt-2 text-gray-600">Update project configuration for {formData.displayName || projectName}</p>
           </div>
           <div className="flex items-center space-x-2">
             {jsonMode && (

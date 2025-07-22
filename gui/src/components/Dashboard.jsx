@@ -153,7 +153,7 @@ function Dashboard() {
               {projects.slice(0, 5).map((project) => (
                 <div key={project.name} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
                   <div>
-                    <h4 className="font-medium text-gray-900">{project.name}</h4>
+                    <h4 className="font-medium text-gray-900">{project.displayName || project.name}</h4>
                     <p className="text-sm text-gray-500">{project.ssh.host}</p>
                   </div>
                   <Link

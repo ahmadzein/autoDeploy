@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Code } from 'lucide-react';
 import { projectAPI } from '../utils/api';
 
 function EditSubDeployment() {
@@ -12,6 +12,10 @@ function EditSubDeployment() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [authMethod, setAuthMethod] = useState('password');
+  const [viewMode, setViewMode] = useState('form'); // 'form' or 'json'
+  const [editMode, setEditMode] = useState('full'); // 'full', 'config', 'local', 'remote'
+  const [jsonContent, setJsonContent] = useState('');
+  const [jsonError, setJsonError] = useState(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -88,6 +92,8 @@ function EditSubDeployment() {
       const sshConfig = subDeployment.ssh || projectData.ssh;
       if (sshConfig?.privateKeyPath) {
         setAuthMethod('key');
+      } else {
+        setAuthMethod('password');
       }
     } catch (err) {
       console.error('Error fetching sub-deployment:', err);
@@ -314,8 +320,106 @@ function EditSubDeployment() {
     }
   };
 
+  // JSON mode functions
+  const getJsonContent = () => {
+    switch (editMode) {
+      case 'full':
+        return formData;
+      case 'config':
+        const { localSteps, deploymentSteps, ...config } = formData;
+        return config;
+      case 'local':
+        return { localSteps: formData.localSteps };
+      case 'remote':
+        return { deploymentSteps: formData.deploymentSteps };
+      default:
+        return formData;
+    }
+  };
+
+  const handleSwitchToJson = () => {
+    const content = getJsonContent();
+    setJsonContent(JSON.stringify(content, null, 2));
+    setJsonError(null);
+    setViewMode('json');
+  };
+
+  const handleSwitchToForm = () => {
+    try {
+      const parsed = JSON.parse(jsonContent);
+      
+      switch (editMode) {
+        case 'full':
+          setFormData(parsed);
+          break;
+        case 'config':
+          setFormData(prev => ({ ...prev, ...parsed }));
+          break;
+        case 'local':
+          if (parsed.localSteps) {
+            setFormData(prev => ({ ...prev, localSteps: parsed.localSteps }));
+          }
+          break;
+        case 'remote':
+          if (parsed.deploymentSteps) {
+            setFormData(prev => ({ ...prev, deploymentSteps: parsed.deploymentSteps }));
+          }
+          break;
+      }
+      
+      setViewMode('form');
+      setJsonError(null);
+    } catch (err) {
+      setJsonError(err.message);
+    }
+  };
+
+  const validateJson = (value) => {
+    try {
+      JSON.parse(value);
+      setJsonError(null);
+    } catch (err) {
+      setJsonError(err.message);
+    }
+  };
+
+  const handleJsonChange = (e) => {
+    const value = e.target.value;
+    setJsonContent(value);
+    validateJson(value);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // If in JSON mode, switch to form mode first to validate
+    if (viewMode === 'json') {
+      try {
+        const parsed = JSON.parse(jsonContent);
+        switch (editMode) {
+          case 'full':
+            setFormData(parsed);
+            break;
+          case 'config':
+            setFormData(prev => ({ ...prev, ...parsed }));
+            break;
+          case 'local':
+            if (parsed.localSteps) {
+              setFormData(prev => ({ ...prev, localSteps: parsed.localSteps }));
+            }
+            break;
+          case 'remote':
+            if (parsed.deploymentSteps) {
+              setFormData(prev => ({ ...prev, deploymentSteps: parsed.deploymentSteps }));
+            }
+            break;
+        }
+      } catch (err) {
+        alert('Invalid JSON: ' + err.message);
+        return;
+      }
+    }
+    
     setSaving(true);
     
     try {
@@ -367,13 +471,120 @@ function EditSubDeployment() {
         </button>
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Edit Sub-deployment</h2>
-          <p className="mt-2 text-gray-600">Edit "{subName}" in {projectName}</p>
+          <p className="mt-2 text-gray-600">Edit "{subName}" in {project?.displayName || projectName}</p>
         </div>
       </div>
 
+      {/* View Mode Toggle */}
+      <div className="mb-6 flex items-center justify-between bg-white rounded-lg shadow p-4">
+        <div className="flex items-center space-x-4">
+          <label className="text-sm font-medium text-gray-700">View Mode:</label>
+          <div className="flex rounded-md shadow-sm">
+            <button
+              type="button"
+              onClick={() => viewMode === 'json' ? handleSwitchToForm() : null}
+              className={`px-4 py-2 text-sm font-medium rounded-l-md ${
+                viewMode === 'form'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              Form
+            </button>
+            <button
+              type="button"
+              onClick={() => viewMode === 'form' ? handleSwitchToJson() : null}
+              className={`px-4 py-2 text-sm font-medium rounded-r-md ${
+                viewMode === 'json'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-r-0 border-gray-300'
+              }`}
+            >
+              <Code className="h-4 w-4 inline mr-1" />
+              JSON
+            </button>
+          </div>
+        </div>
+        
+        {viewMode === 'json' && (
+          <div className="flex items-center space-x-4">
+            <label className="text-sm font-medium text-gray-700">Edit:</label>
+            <select
+              value={editMode}
+              onChange={(e) => {
+                setEditMode(e.target.value);
+                handleSwitchToJson();
+              }}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm"
+            >
+              <option value="full">Full Config</option>
+              <option value="config">Config Only</option>
+              <option value="local">Local Steps</option>
+              <option value="remote">Remote Steps</option>
+            </select>
+          </div>
+        )}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <div className="bg-white shadow rounded-lg p-6">
+        {viewMode === 'json' ? (
+          /* JSON Editor */
+          <div className="bg-white shadow rounded-lg p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">
+                {editMode === 'full' && 'Full Configuration'}
+                {editMode === 'config' && 'Configuration (without steps)'}
+                {editMode === 'local' && 'Local Steps Only'}
+                {editMode === 'remote' && 'Remote Steps Only'}
+              </h3>
+              <div className="flex items-center space-x-2">
+                {jsonError ? (
+                  <span className="flex items-center text-red-600">
+                    <span className="w-2 h-2 bg-red-600 rounded-full mr-2"></span>
+                    Invalid JSON
+                  </span>
+                ) : (
+                  <span className="flex items-center text-green-600">
+                    <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
+                    Valid JSON
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="relative">
+              <textarea
+                value={jsonContent}
+                onChange={handleJsonChange}
+                className={`w-full h-96 p-4 font-mono text-sm border rounded-md focus:ring-2 focus:outline-none ${
+                  jsonError 
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-purple-500 focus:border-purple-500'
+                }`}
+                spellCheck="false"
+              />
+              {jsonError && (
+                <p className="mt-2 text-sm text-red-600">{jsonError}</p>
+              )}
+            </div>
+            
+            <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+              <span>
+                File location: ~/.autodeploy/projects/{projectName}/sub-deployments/{subName}/
+              </span>
+              <button
+                type="button"
+                onClick={handleSwitchToForm}
+                className="text-purple-600 hover:text-purple-700"
+              >
+                Switch to Form View
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Basic Information */}
+            <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Sub-deployment Information</h3>
           
           <div className="grid grid-cols-1 gap-6">
@@ -858,6 +1069,8 @@ function EditSubDeployment() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
         {/* Submit */}
         <div className="flex justify-end space-x-4">
