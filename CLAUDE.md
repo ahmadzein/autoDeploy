@@ -171,6 +171,22 @@ node src/config/migrate.js
 
 ### 5. API Server Updates
 
+#### Error Detection in SSH Commands:
+- **Pattern-based Error Detection**: StatefulSSHExecutor now detects errors in command output
+- **Success Pattern Override**: Explicit success messages override error detection
+- **Smart Error Patterns**:
+  - PHP/MySQL exceptions and fatal errors
+  - Command not found errors
+  - Database errors (table exists, access denied)
+  - Git errors (fatal, push rejected)
+  - Build/compilation failures
+  - Exit code detection in output
+- **False Positive Prevention**:
+  - Ignores "0 errors" patterns
+  - Skips error log references
+  - Avoids error handling discussions
+- **Error Reporting**: Commands marked as failed with error message in UI
+
 #### Local Step Execution:
 ```javascript
 // Execute local steps before SSH connection
@@ -437,6 +453,10 @@ gui/src/
 - [ ] Deployment logs saved separately in logs.json
 - [ ] History command loads logs from separate file
 - [ ] Old deployments still work without logs.json
+- [ ] Error detection in SSH commands (MySQL errors, PHP errors, etc)
+- [ ] Commands with errors marked as failed in deployment view
+- [ ] Success patterns override error detection
+- [ ] False positive error patterns are ignored
 - [ ] Stateful SSH maintains session between commands
 - [ ] Interactive prompts work in both GUI and CLI
 - [ ] Nested SSH commands execute properly

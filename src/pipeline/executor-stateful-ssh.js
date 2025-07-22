@@ -137,14 +137,22 @@ export class StatefulSSHExecutor extends EventEmitter {
                                 const stepIndex = this.currentCommandIndex - 1;
                                 const step = steps[stepIndex];
                                 
+                                // Check if the output contains error indicators
+                                const hasError = this.detectCommandError(currentOutput);
+                                
                                 results.push({
                                     step: step.name,
-                                    success: true,
+                                    success: !hasError,
                                     output: currentOutput,
+                                    error: hasError ? 'Command completed with errors' : undefined,
                                     duration: Date.now() - stepStartTime
                                 });
                                 
-                                console.log(chalk.green(`[STATEFUL-SSH] Step ${stepIndex + 1} completed (natural end)`));
+                                if (hasError) {
+                                    console.log(chalk.red(`[STATEFUL-SSH] Step ${stepIndex + 1} completed with errors`));
+                                } else {
+                                    console.log(chalk.green(`[STATEFUL-SSH] Step ${stepIndex + 1} completed (natural end)`));
+                                }
                             }
                             
                             // Close the session gracefully
@@ -182,14 +190,22 @@ export class StatefulSSHExecutor extends EventEmitter {
                                 // Check if this was just an SSH command that succeeded
                                 const isSSHCommand = step.command.trim().match(/^ssh\s+[^\s]+\s*$/);
                                 
+                                // Check if the output contains error indicators
+                                const hasError = this.detectCommandError(currentOutput);
+                                
                                 results.push({
                                     step: step.name,
-                                    success: true,
+                                    success: !hasError,
                                     output: currentOutput,
+                                    error: hasError ? 'Command completed with errors' : undefined,
                                     duration: Date.now() - stepStartTime
                                 });
                                 
-                                console.log(chalk.green(`[STATEFUL-SSH] Step ${stepIndex + 1} completed`));
+                                if (hasError) {
+                                    console.log(chalk.red(`[STATEFUL-SSH] Step ${stepIndex + 1} completed with errors`));
+                                } else {
+                                    console.log(chalk.green(`[STATEFUL-SSH] Step ${stepIndex + 1} completed`));
+                                }
                                 
                                 // For SSH commands, we're now in a nested session
                                 if (isSSHCommand) {
@@ -282,6 +298,92 @@ export class StatefulSSHExecutor extends EventEmitter {
             
             connection.conn.connect(connectionConfig);
         });
+    }
+    
+    /**
+     * Check if the command output contains error indicators
+     */
+    detectCommandError(output) {
+        // First check for explicit success indicators that override error detection
+        const successPatterns = [
+            /successfully\s+(deployed|completed|finished|built|installed)/i,
+            /deployment\s+complete[d]?/i,
+            /build\s+succeeded/i,
+            /all\s+tests\s+pass/i,
+            /0\s+error\(s\)/i
+        ];
+        
+        // If we have explicit success indicators, don't check for errors
+        if (successPatterns.some(pattern => pattern.test(output))) {
+            return false;
+        }
+        
+        // Common error patterns that indicate command failure
+        const errorPatterns = [
+            // PHP/MySQL errors (more specific)
+            /ERROR\s+-->\s+\w+_sql_exception:/i,
+            /Fatal\s+error:/i,
+            /Parse\s+error:/i,
+            /Uncaught\s+exception:/i,
+            /mysqli_sql_exception:/i,
+            
+            // General command errors (more specific to avoid false positives)
+            /command\s+not\s+found$/m,
+            /No\s+such\s+file\s+or\s+directory$/m,
+            /Permission\s+denied$/m,
+            /cannot\s+access/i,
+            /^fatal:/mi,  // Git fatal errors at start of line
+            
+            // Database errors
+            /Table\s+.*\s+already\s+exists/i,
+            /Duplicate\s+entry/i,
+            /Access\s+denied\s+for\s+user/i,
+            /Unknown\s+database/i,
+            /ERROR\s+\d+\s+\(/i,  // MySQL error codes like ERROR 1050 (
+            
+            // Git errors
+            /fatal:\s+Not\s+a\s+git\s+repository/i,
+            /error:\s+failed\s+to\s+push/i,
+            /rejected.*\(non-fast-forward\)/i,
+            
+            // Build/compilation errors
+            /npm\s+ERR!/,
+            /ERROR\s+in\s+/,
+            /Build\s+failed/i,
+            /Compilation\s+failed/i,
+            /Error:\s+Cannot\s+find\s+module/i,
+            
+            // Script/execution errors
+            /bash:\s+.*:\s+command\s+not\s+found/,
+            /sh:\s+.*:\s+not\s+found/,
+            /returned\s+non-zero\s+exit\s+status/i,
+            /exited\s+with\s+code\s+[1-9]/i
+        ];
+        
+        // Check if output contains any error patterns
+        const hasError = errorPatterns.some(pattern => pattern.test(output));
+        
+        // Additional check: if output contains "error" but not in common false positive contexts
+        if (!hasError && /error/i.test(output)) {
+            // Check for false positives
+            const falsePositives = [
+                /0\s+errors?/i,
+                /no\s+errors?/i,
+                /without\s+errors?/i,
+                /error\s*:\s*0/i,
+                /error\s+count\s*:\s*0/i,
+                /warnings?\s+and\s+\d+\s+errors?/i,  // npm/webpack style where 0 errors is ok
+                /error\s+log/i,  // Just referring to error log file
+                /error\s+handling/i,  // Discussing error handling
+                /on\s+error/i  // Event handlers
+            ];
+            
+            if (!falsePositives.some(pattern => pattern.test(output))) {
+                return true;
+            }
+        }
+        
+        return hasError;
     }
     
     /**
