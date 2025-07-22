@@ -69,6 +69,11 @@ export function createAPIServer(port = 3000) {
                 return res.status(400).json({ error: 'Project name is required' });
             }
             
+            // Ensure localPath is absolute
+            if (project.localPath && !project.localPath.startsWith('/') && !project.localPath.match(/^[A-Za-z]:\\/)) {
+                project.localPath = '/' + project.localPath;
+            }
+            
             // Generate slug from project name
             const baseSlug = createSlug(project.name);
             const existingProjects = configManager.getAllProjects();
@@ -102,7 +107,14 @@ export function createAPIServer(port = 3000) {
     app.put('/api/projects/:name', (req, res) => {
         try {
             const projectName = decodeURIComponent(req.params.name);
-            configManager.updateProject(projectName, req.body);
+            const projectData = req.body;
+            
+            // Ensure localPath is absolute
+            if (projectData.localPath && !projectData.localPath.startsWith('/') && !projectData.localPath.match(/^[A-Za-z]:\\/)) {
+                projectData.localPath = '/' + projectData.localPath;
+            }
+            
+            configManager.updateProject(projectName, projectData);
             res.json({ success: true });
         } catch (error) {
             res.status(500).json({ error: error.message });
@@ -249,7 +261,13 @@ export function createAPIServer(port = 3000) {
                             })}\n\n`);
                             
                             try {
-                                const trimmedLocalPath = subDeployment.localPath.trim();
+                                let trimmedLocalPath = subDeployment.localPath.trim();
+                                
+                                // Ensure path starts with / (for Unix-like systems)
+                                if (!trimmedLocalPath.startsWith('/') && !trimmedLocalPath.match(/^[A-Za-z]:\\/)) {
+                                    trimmedLocalPath = '/' + trimmedLocalPath;
+                                }
+                                
                                 workingDir = step.workingDir === '.' 
                                     ? trimmedLocalPath 
                                     : join(trimmedLocalPath, step.workingDir);
@@ -572,8 +590,14 @@ export function createAPIServer(port = 3000) {
                     })}\n\n`);
                     
                     try {
-                        // Trim whitespace from paths
-                        const trimmedLocalPath = project.localPath.trim();
+                        // Trim whitespace from paths and ensure absolute path
+                        let trimmedLocalPath = project.localPath.trim();
+                        
+                        // Ensure path starts with / (for Unix-like systems)
+                        if (!trimmedLocalPath.startsWith('/') && !trimmedLocalPath.match(/^[A-Za-z]:\\/)) {
+                            trimmedLocalPath = '/' + trimmedLocalPath;
+                        }
+                        
                         workingDir = step.workingDir === '.' 
                             ? trimmedLocalPath 
                             : join(trimmedLocalPath, step.workingDir);
