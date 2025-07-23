@@ -285,15 +285,22 @@ function DeploymentView() {
 
   const handlePromptSubmit = async (e) => {
     e.preventDefault();
-    if (!promptData || !userInput.trim()) return;
+    
+    // For "Press enter" prompts, allow empty input
+    if (!promptData) return;
+    if (promptData.type !== 'press-enter' && !userInput.trim()) return;
 
     try {
-      addLog(`> ${userInput}`, 'user-input');
+      // For "Press enter" prompts, send empty string
+      const inputToSend = promptData.type === 'press-enter' ? '' : userInput;
+      const displayText = promptData.type === 'press-enter' ? '> (pressed enter)' : `> ${userInput}`;
+      
+      addLog(displayText, 'user-input');
       
       // Send the input to the server
       await deploymentAPI.sendDeploymentInput(projectName, {
         sessionId: promptData.sessionId,
-        input: userInput
+        input: inputToSend
       });
       
       // Clear the prompt
@@ -703,21 +710,36 @@ function DeploymentView() {
           {promptData && (
             <form onSubmit={handlePromptSubmit} className="mt-4 flex items-center">
               <span className="text-yellow-300 mr-2">?</span>
-              <input
-                ref={promptInputRef}
-                type="text"
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Enter your response..."
-                className="flex-1 bg-gray-800 text-gray-100 px-3 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="ml-2 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
-              >
-                Send
-              </button>
+              {promptData.type === 'press-enter' ? (
+                <>
+                  <span className="text-yellow-300 flex-1">Press Enter to continue...</span>
+                  <button
+                    type="submit"
+                    className="ml-2 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
+                    autoFocus
+                  >
+                    Press Enter
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    ref={promptInputRef}
+                    type="text"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    placeholder="Enter your response..."
+                    className="flex-1 bg-gray-800 text-gray-100 px-3 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    className="ml-2 px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
+                  >
+                    Send
+                  </button>
+                </>
+              )}
             </form>
           )}
           {deploying && (

@@ -21,6 +21,8 @@ export class StatefulSSHExecutor extends EventEmitter {
         this.waitingForUserInput = false;
         this.userInputCallback = null;
         this.sessionId = null;
+        this.currentStep = null;
+        this.prefilledInputIndex = 0;
     }
 
     /**
@@ -168,16 +170,44 @@ export class StatefulSSHExecutor extends EventEmitter {
                         // Check for interactive prompts (questions from scripts)
                         if (this.detectInteractivePrompt(commandBuffer, currentOutput)) {
                             if (!this.waitingForUserInput) {
-                                this.waitingForUserInput = true;
                                 const promptText = this.extractPromptText(commandBuffer);
                                 console.log(chalk.yellow(`[STATEFUL-SSH] Detected interactive prompt: ${promptText}`));
                                 
-                                // Emit prompt event for GUI
-                                this.emit('prompt', {
-                                    sessionId: this.sessionId,
-                                    prompt: promptText,
-                                    step: steps[Math.max(0, this.currentCommandIndex - 1)]?.name || 'Unknown'
-                                });
+                                // Get current step
+                                const currentStepIndex = Math.max(0, this.currentCommandIndex - 1);
+                                const currentStep = steps[currentStepIndex];
+                                
+                                // Check if we have prefilled inputs for this step
+                                if (currentStep && 
+                                    currentStep.inputs && 
+                                    currentStep.inputs.length > this.prefilledInputIndex) {
+                                    
+                                    // Use prefilled input
+                                    const prefilledInput = currentStep.inputs[this.prefilledInputIndex];
+                                    this.prefilledInputIndex++;
+                                    
+                                    console.log(chalk.green(`[STATEFUL-SSH] Using prefilled answer: ${prefilledInput.value || '(empty)'}`));
+                                    
+                                    // Send the prefilled answer
+                                    setTimeout(() => {
+                                        const inputValue = prefilledInput.value || '';
+                                        stream.write(inputValue + '\n');
+                                    }, 100);
+                                } else {
+                                    // No prefilled input, ask user
+                                    this.waitingForUserInput = true;
+                                    
+                                    // Check if it's a "Press enter" prompt
+                                    const isPressEnterPrompt = /press\s+enter/i.test(promptText);
+                                    
+                                    // Emit prompt event for GUI
+                                    this.emit('prompt', {
+                                        sessionId: this.sessionId,
+                                        prompt: promptText,
+                                        step: currentStep?.name || 'Unknown',
+                                        type: isPressEnterPrompt ? 'press-enter' : 'question'
+                                    });
+                                }
                             }
                         }
                         // Check if we're at a shell prompt
@@ -226,6 +256,7 @@ export class StatefulSSHExecutor extends EventEmitter {
                                 stepStartTime = Date.now();
                                 executingCommand = true;
                                 this.currentCommandIndex++;
+                                this.prefilledInputIndex = 0; // Reset prefilled input index for new step
                                 
                                 // Send command
                                 stream.write(command + '\n');

@@ -98,6 +98,36 @@ node src/config/migrate.js
 - In CLI: The terminal will pause for user input
 - Works with nested SSH sessions (jump servers)
 
+#### Prefilled Inputs for Interactive Steps:
+```json
+{
+  "name": "Run Deployment Script",
+  "command": "bash deploy.sh",
+  "workingDir": ".",
+  "continueOnError": false,
+  "interactive": true,
+  "inputs": [
+    {
+      "name": "branch",
+      "value": "main"
+    },
+    {
+      "name": "ticket",
+      "value": "JIRA-123"
+    },
+    {
+      "name": "press_enter",
+      "value": ""  // Empty value for "Press enter" prompts
+    }
+  ]
+}
+```
+
+- **Prefilled inputs**: Automatically answer prompts in order
+- **Dynamic prompts**: If no prefilled input exists, GUI shows prompt
+- **Press Enter prompts**: Detected automatically, shows special UI
+- **Mixed mode**: Can have some prefilled, some manual prompts
+
 ### 2. Deployment History Tracking
 - Records all deployments with timestamps, duration, and step results
 - Stores last 50 deployments per project
