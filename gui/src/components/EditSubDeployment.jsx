@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Code, Edit2, X, Check } from 'lucide-react';
 import { projectAPI } from '../utils/api';
 import Breadcrumb from './Breadcrumb';
+import StepEditor from './StepEditor';
 
 function EditSubDeployment() {
   const { projectName, subName } = useParams();
@@ -17,8 +18,6 @@ function EditSubDeployment() {
   const [editMode, setEditMode] = useState('full'); // 'full', 'config', 'local', 'remote'
   const [jsonContent, setJsonContent] = useState('');
   const [jsonError, setJsonError] = useState(null);
-  const [editingStepIndex, setEditingStepIndex] = useState(null);
-  const [editingStepType, setEditingStepType] = useState(null); // 'local' or 'remote'
   
   const [formData, setFormData] = useState({
     name: '',
@@ -38,25 +37,6 @@ function EditSubDeployment() {
     deploymentSteps: []
   });
 
-  const [newLocalStep, setNewLocalStep] = useState({
-    name: '',
-    command: '',
-    workingDir: '.',
-    continueOnError: false,
-    interactive: false,
-    inputs: [],
-    envVars: []
-  });
-
-  const [newRemoteStep, setNewRemoteStep] = useState({
-    name: '',
-    command: '',
-    workingDir: '.',
-    continueOnError: false,
-    interactive: false,
-    inputs: [],
-    envVars: []
-  });
 
   useEffect(() => {
     fetchSubDeployment();
@@ -160,55 +140,6 @@ function EditSubDeployment() {
     }
   };
 
-  const removeLocalStep = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      localSteps: prev.localSteps.filter((_, i) => i !== index)
-    }));
-  };
-
-  const removeRemoteStep = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      deploymentSteps: prev.deploymentSteps.filter((_, i) => i !== index)
-    }));
-  };
-
-  const addLocalStep = () => {
-    if (newLocalStep.name && newLocalStep.command) {
-      setFormData(prev => ({
-        ...prev,
-        localSteps: [...prev.localSteps, { ...newLocalStep }]
-      }));
-      setNewLocalStep({
-        name: '',
-        command: '',
-        workingDir: '.',
-        continueOnError: false,
-        interactive: false,
-        inputs: [],
-        envVars: []
-      });
-    }
-  };
-
-  const addRemoteStep = () => {
-    if (newRemoteStep.name && newRemoteStep.command) {
-      setFormData(prev => ({
-        ...prev,
-        deploymentSteps: [...prev.deploymentSteps, { ...newRemoteStep }]
-      }));
-      setNewRemoteStep({
-        name: '',
-        command: '',
-        workingDir: '.',
-        continueOnError: false,
-        interactive: false,
-        inputs: [],
-        envVars: []
-      });
-    }
-  };
 
   // Input and environment variable functions (same as AddSubDeployment)
   const addLocalInput = () => {
@@ -305,33 +236,6 @@ function EditSubDeployment() {
   };
 
   // Edit step functions
-  const startEditingStep = (index, type) => {
-    setEditingStepIndex(index);
-    setEditingStepType(type);
-  };
-
-  const cancelEditingStep = () => {
-    setEditingStepIndex(null);
-    setEditingStepType(null);
-  };
-
-  const updateStep = (index, type, field, value) => {
-    if (type === 'local') {
-      setFormData(prev => ({
-        ...prev,
-        localSteps: prev.localSteps.map((step, i) => 
-          i === index ? { ...step, [field]: value } : step
-        )
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        deploymentSteps: prev.deploymentSteps.map((step, i) => 
-          i === index ? { ...step, [field]: value } : step
-        )
-      }));
-    }
-  };
 
   const handleTestConnection = async () => {
     if (formData.inheritSSH || !formData.ssh.password) return;
@@ -424,26 +328,24 @@ function EditSubDeployment() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // If in JSON mode, switch to form mode first to validate
+    let dataToSave = formData;
+    
+    // If in JSON mode, parse and use the JSON data directly
     if (viewMode === 'json') {
       try {
         const parsed = JSON.parse(jsonContent);
         switch (editMode) {
           case 'full':
-            setFormData(parsed);
+            dataToSave = parsed;
             break;
           case 'config':
-            setFormData(prev => ({ ...prev, ...parsed }));
+            dataToSave = { ...formData, ...parsed };
             break;
           case 'local':
-            if (parsed.localSteps) {
-              setFormData(prev => ({ ...prev, localSteps: parsed.localSteps }));
-            }
+            dataToSave = { ...formData, localSteps: parsed.localSteps || parsed };
             break;
           case 'remote':
-            if (parsed.deploymentSteps) {
-              setFormData(prev => ({ ...prev, deploymentSteps: parsed.deploymentSteps }));
-            }
+            dataToSave = { ...formData, deploymentSteps: parsed.deploymentSteps || parsed };
             break;
         }
       } catch (err) {
@@ -456,12 +358,12 @@ function EditSubDeployment() {
     
     try {
       const subData = {
-        ...formData,
-        ssh: formData.inheritSSH ? undefined : formData.ssh
+        ...dataToSave,
+        ssh: dataToSave.inheritSSH ? undefined : dataToSave.ssh
       };
       
       // Clean up SSH config based on auth method if not inheriting
-      if (!formData.inheritSSH && subData.ssh) {
+      if (!dataToSave.inheritSSH && subData.ssh) {
         if (authMethod === 'password') {
           delete subData.ssh.privateKeyPath;
           delete subData.ssh.passphrase;
@@ -855,15 +757,20 @@ function EditSubDeployment() {
           )}
         </div>
 
-        {/* Local Steps - reusing the exact same structure as AddSubDeployment but with existing steps */}
+        {/* Local Steps */}
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Local Deployment Steps</h3>
           <p className="text-sm text-gray-600 mb-4">Commands that run on your local machine before deployment</p>
           
-          {/* Existing Steps */}
-          {formData.localSteps.length > 0 && (
-            <div className="space-y-3 mb-6">
-              {formData.localSteps.map((step, index) => (
+          <StepEditor
+            steps={formData.localSteps}
+            onStepsChange={(steps) => setFormData(prev => ({ ...prev, localSteps: steps }))}
+            stepType="local"
+            projectPath={formData.localPath || '.'}
+          />
+        </div>
+
+        {/* Remote Steps */}
                 <div key={index} className="p-3 bg-gray-50 rounded-md">
                   {editingStepIndex === index && editingStepType === 'local' ? (
                     <div className="space-y-3">
@@ -1063,10 +970,17 @@ function EditSubDeployment() {
           </div>
         </div>
 
-        {/* Remote Steps - same structure as local steps */}
+        {/* Remote Steps */}
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Remote Deployment Steps</h3>
           <p className="text-sm text-gray-600 mb-4">Commands that run on the deployment server</p>
+          
+          <StepEditor
+            steps={formData.deploymentSteps}
+            onStepsChange={(steps) => setFormData(prev => ({ ...prev, deploymentSteps: steps }))}
+            stepType="remote"
+            projectPath={formData.remotePath || '.'}
+          />
           
           {/* Existing Steps */}
           {formData.deploymentSteps.length > 0 && (
