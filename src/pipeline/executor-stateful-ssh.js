@@ -536,10 +536,6 @@ export class StatefulSSHExecutor extends EventEmitter {
             /Completed\s*\n.*\$\s*$/im,
             /Finished\s*\n.*\$\s*$/im,
             
-            // Script output followed by returning to original server prompt
-            /ubuntu@ip-\d+-\d+-\d+-\d+:~\$\s*$/m,
-            /\[ec2-user@ip-\d+-\d+-\d+-\d+ ~\]\$\s*$/m,
-            
             // Common deployment completion messages
             /deployment.*complete[d]?\s*$/i,
             /successfully deployed\s*$/i,
@@ -556,6 +552,20 @@ export class StatefulSSHExecutor extends EventEmitter {
         
         // Check recent output (last 500 chars)
         const recent = recentOutput.slice(-500);
+        
+        // Don't consider it complete if we just SSHed into a server
+        // Check if the recent output contains SSH welcome messages
+        const sshWelcomePatterns = [
+            /Welcome to Ubuntu/i,
+            /Last login:/i,
+            /System information as of/i,
+            /Amazon Linux \d+/i
+        ];
+        
+        const hasSSHWelcome = sshWelcomePatterns.some(pattern => pattern.test(recent));
+        if (hasSSHWelcome) {
+            return false; // Not a script completion, just SSH connection
+        }
         
         for (const pattern of completionPatterns) {
             if (pattern.test(recent)) {

@@ -68,7 +68,8 @@ node src/config/migrate.js
       "name": "Build Application",
       "command": "npm run build",
       "workingDir": ".",
-      "continueOnError": false
+      "continueOnError": false,
+      "interactive": false
     }
   ],
   "deploymentSteps": [
@@ -76,11 +77,26 @@ node src/config/migrate.js
       "name": "Install Dependencies", 
       "command": "npm ci --production",
       "workingDir": ".",
-      "continueOnError": false
+      "continueOnError": false,
+      "interactive": false
+    },
+    {
+      "name": "Run Deployment Script",
+      "command": "bash updateStaging.sh",
+      "workingDir": ".",
+      "continueOnError": false,
+      "interactive": true  // Set to true for scripts that ask questions
     }
   ]
 }
 ```
+
+#### Interactive Steps:
+- Set `"interactive": true` for steps that prompt for user input
+- The system will detect prompts ending with `?` or `:` 
+- In GUI: A yellow prompt UI will appear for user input
+- In CLI: The terminal will pause for user input
+- Works with nested SSH sessions (jump servers)
 
 ### 2. Deployment History Tracking
 - Records all deployments with timestamps, duration, and step results
