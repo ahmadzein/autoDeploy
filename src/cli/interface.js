@@ -4,7 +4,9 @@ import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 import { ConfigManager } from '../config/manager.js';
 import { GitOperations } from '../git/operations.js';
 import { SSHConnection } from '../ssh/connection.js';
@@ -13,6 +15,12 @@ import { StatefulSSHExecutor } from '../pipeline/executor-stateful-ssh.js';
 import readline from 'readline';
 import { startGUIService, startGUIProduction } from './gui-service.js';
 import { handleEditCommand } from './edit-command.js';
+
+// Get version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
+const version = packageJson.version;
 import { createSlug, ensureUniqueSlug } from '../utils/slug.js';
 
 const program = new Command();
@@ -136,7 +144,7 @@ async function createStep(stepType = 'deployment') {
 program
     .name('autodeploy')
     .description('Local deployment automation tool with SSH key authentication support')
-    .version('1.1.0')
+    .version(version)
     .addHelpText('after', `
 SSH Authentication:
   AutoDeploy supports both password and SSH key authentication:

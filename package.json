@@ -1,6 +1,6 @@
 {
   "name": "autodeploy-cli",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Local deployment automation tool - CLI",
   "main": "src/index.js",
   "type": "module",

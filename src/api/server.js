@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync } from 'fs';
 import { ConfigManager } from '../config/manager.js';
 import { GitOperations } from '../git/operations.js';
 import { SSHConnection } from '../ssh/connection.js';
@@ -21,6 +22,10 @@ import { deploymentManager } from '../deployment/manager.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Get version from package.json
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
+const version = packageJson.version;
+
 export function createAPIServer(port = 3000) {
     const app = express();
     const configManager = new ConfigManager();
@@ -31,7 +36,7 @@ export function createAPIServer(port = 3000) {
 
     // Health check
     app.get('/api/health', (req, res) => {
-        res.json({ status: 'ok', version: '1.1.0' });
+        res.json({ status: 'ok', version: version });
     });
 
     // Get all projects
