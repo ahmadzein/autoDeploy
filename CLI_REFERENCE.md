@@ -180,6 +180,11 @@ autodeploy edit <project-name> [options]
 - Edit as JSON
 - Cancel
 
+**Step Features:**
+- **Interactive Steps**: Mark steps as interactive to handle prompts
+- **Prefilled Inputs**: Configure automatic responses for prompts
+- **Continue on Error**: Allow deployment to continue if step fails
+
 **JSON Mode File Options:**
 - Project Settings (config.json)
 - Local Steps (local-steps.json)
@@ -194,7 +199,24 @@ autodeploy edit my-api
 
 # JSON edit mode
 autodeploy edit my-api --json
+
+# Step configuration example
+# When adding/editing a step:
+# - Name: Deploy Application
+# - Command: ./deploy.sh
+# - Working directory: .
+# - Continue on error? No
+# - Interactive command? Yes
+# - Configure prefilled inputs:
+#   - Input name: branch
+#   - Value: main
 ```
+
+**Interactive Steps Configuration:**
+When marking a step as interactive, you can configure prefilled inputs that will be automatically provided when prompts are detected:
+- Leave value empty for "Press enter" prompts
+- Inputs are used in the order they are defined
+- If no prefilled input matches, user will be prompted
 
 ### remove
 

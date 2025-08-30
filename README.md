@@ -189,6 +189,34 @@ autodeploy deploy my-monorepo --sub frontend     # Deploy specific sub-project
 - **Step timing**: Track how long each step takes
 - **Error handling**: Continue on error or stop deployment
 - **History tracking**: All deployments are recorded with details
+- **Interactive prompts**: Handle commands that require user input
+- **Prefilled inputs**: Automate responses to known prompts
+
+#### Interactive Steps
+AutoDeploy supports interactive deployment steps that require user input:
+
+```bash
+# Example interactive step configuration:
+Step Name: Deploy with Branch Selection
+Command: ./deploy.sh
+Interactive: Yes
+Prefilled Inputs:
+  - branch: main
+  - environment: production
+```
+
+**Features:**
+- Mark any step as "interactive" to enable prompt handling
+- Configure prefilled inputs for automatic responses
+- Leave input value empty for "Press enter" prompts
+- Manual prompts appear when no prefilled input matches
+- Works with both CLI and GUI interfaces
+
+**Common Use Cases:**
+- Branch/tag selection during deployment
+- Environment selection (dev/staging/prod)
+- Database migration confirmations
+- Service restart confirmations
 
 ### Edit Project Configuration
 

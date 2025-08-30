@@ -303,32 +303,32 @@ export function createAPIServer(port = 3000) {
                 const isGitRepo = await gitOps.isGitRepo();
                 
                 if (isGitRepo) {
-                    sendMessage({ 
+                    res.write(`data: ${JSON.stringify({ 
                         type: 'progress', 
                         message: 'Committing and pushing monorepo changes...' 
-                    });
+                    })}\n\n`);
                     
                     const gitResult = await gitOps.commitAndPush(`Auto-deploy: ${new Date().toISOString()}`);
                     
-                    sendMessage({ 
+                    res.write(`data: ${JSON.stringify({ 
                         type: gitResult.success ? 'progress' : 'error', 
                         message: gitResult.message 
-                    });
+                    })}\n\n`);
                 }
                 
                 // Deploy each sub-deployment
                 for (const subDeployment of deploymentTargets) {
-                    sendMessage({ 
+                    res.write(`data: ${JSON.stringify({ 
                         type: 'progress', 
                         message: `\n=== Deploying sub-project: ${subDeployment.name} ===` 
-                    });
+                    })}\n\n`);
                     
                     // Execute local steps for sub-deployment
                     if (subDeployment.localSteps && subDeployment.localSteps.length > 0) {
-                        sendMessage({ 
+                        res.write(`data: ${JSON.stringify({ 
                             type: 'progress', 
                             message: `Executing local steps for ${subDeployment.name}...` 
-                        });
+                        })}\n\n`);
                         
                         const { exec } = await import('child_process');
                         const { promisify } = await import('util');
@@ -338,10 +338,10 @@ export function createAPIServer(port = 3000) {
                             const stepStartTime = Date.now();
                             let workingDir = '';
                             
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: 'step', 
                                 message: `[${subDeployment.name}/Local] Running: ${step.name}` 
-                            });
+                            })}\n\n`);
                             
                             try {
                                 let trimmedLocalPath = subDeployment.localPath.trim();
@@ -390,11 +390,11 @@ export function createAPIServer(port = 3000) {
                                     duration: Date.now() - stepStartTime
                                 });
                                 
-                                sendMessage({ 
+                                res.write(`data: ${JSON.stringify({ 
                                     type: 'step-complete', 
                                     message: output,
                                     step: `${subDeployment.name}/${step.name}`
-                                });
+                                })}\n\n`);
                             } catch (error) {
                                 const isGitCommand = step.command.toLowerCase().includes('git commit');
                                 const isNothingToCommit = error.message && (
@@ -413,11 +413,11 @@ export function createAPIServer(port = 3000) {
                                         duration: Date.now() - stepStartTime
                                     });
                                     
-                                    sendMessage({ 
+                                    res.write(`data: ${JSON.stringify({ 
                                         type: 'step-complete', 
                                         message: message,
                                         step: `${subDeployment.name}/${step.name}`
-                                    });
+                                    })}\n\n`);
                                 } else {
                                     let errorDetails = error.message;
                                     if (error.stderr) {
@@ -431,11 +431,11 @@ export function createAPIServer(port = 3000) {
                                         duration: Date.now() - stepStartTime
                                     });
                                     
-                                    sendMessage({ 
+                                    res.write(`data: ${JSON.stringify({ 
                                         type: 'step-error', 
                                         message: errorDetails,
                                         step: `${subDeployment.name}/${step.name}`
-                                    });
+                                    })}\n\n`);
                                     
                                     if (!step.continueOnError) {
                                         deploymentSuccess = false;
@@ -471,35 +471,34 @@ export function createAPIServer(port = 3000) {
                             statefulExecutor.setSessionId(sessionId);
                             currentExecutor = statefulExecutor;
                             activeExecutors.push(statefulExecutor);
-                            deploymentManager.setExecutor(projectName, statefulExecutor);
                             
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: 'info', 
                                 message: `[${subDeployment.name}] Using stateful SSH session for ${subDeployment.deploymentSteps.length} steps` 
-                            });
+                            })}\n\n`);
                             
                             // Listen for real-time output
                             statefulExecutor.on('output', (data) => {
                                 const lines = data.data.split('\n');
                                 lines.forEach(line => {
                                     if (line.trim()) {
-                                        sendMessage({ 
+                                        res.write(`data: ${JSON.stringify({ 
                                             type: 'output', 
                                             data: line + '\n',
                                             outputType: data.type || 'stdout'
-                                        });
+                                        })}\n\n`);
                                     }
                                 });
                             });
                             
                             // Listen for prompts
                             statefulExecutor.on('prompt', (promptData) => {
-                                sendMessage({ 
+                                res.write(`data: ${JSON.stringify({ 
                                     type: 'prompt', 
                                     sessionId: promptData.sessionId,
                                     step: promptData.step,
                                     prompt: promptData.prompt
-                                });
+                                })}\n\n`);
                                 
                                 // Store executor in global sessions for input handling
                                 if (!global.deploymentSessions) {
@@ -542,11 +541,11 @@ export function createAPIServer(port = 3000) {
                                         duration: result.duration || Math.floor((Date.now() - startTime) / results.length)
                                     });
                                     
-                                    sendMessage({ 
+                                    res.write(`data: ${JSON.stringify({ 
                                         type: result.success ? 'step-complete' : 'step-error', 
                                         message: result.output || result.error,
                                         step: `${subDeployment.name}/${step.name}`
-                                    });
+                                    })}\n\n`);
                                     
                                     if (!result.success && !step.continueOnError) {
                                         deploymentSuccess = false;
@@ -563,32 +562,31 @@ export function createAPIServer(port = 3000) {
                             const executor = new InteractivePipelineExecutor(sshConfig, subDeployment.remotePath);
                             currentExecutor = executor;
                             activeExecutors.push(executor);
-                            deploymentManager.setExecutor(projectName, executor);
                             
                             for (const step of subDeployment.deploymentSteps) {
                                 const stepStartTime = Date.now();
                                 
-                                sendMessage({ 
+                                res.write(`data: ${JSON.stringify({ 
                                     type: 'step', 
                                     message: `[${subDeployment.name}/Remote] Running: ${step.name}` 
-                                });
+                                })}\n\n`);
                                 
                                 // Set up interactive handling
                                 executor.on('output', (data) => {
-                                    sendMessage({ 
+                                    res.write(`data: ${JSON.stringify({ 
                                         type: 'output', 
                                         data: data.data,
                                         outputType: data.type 
-                                    });
+                                    })}\n\n`);
                                 });
                                 
                                 executor.on('prompt', (promptData) => {
-                                    sendMessage({ 
+                                    res.write(`data: ${JSON.stringify({ 
                                         type: 'prompt', 
                                         sessionId: sessionId,
                                         step: `${subDeployment.name}/${promptData.step}`,
                                         prompt: promptData.prompt
-                                    });
+                                    })}\n\n`);
                                 });
                                 
                                 const result = await executor.executeStep(step, (prompt, callback) => {
@@ -618,11 +616,11 @@ export function createAPIServer(port = 3000) {
                                     duration: Date.now() - stepStartTime
                                 });
                                 
-                                sendMessage({ 
+                                res.write(`data: ${JSON.stringify({ 
                                     type: result.success ? 'step-complete' : 'step-error', 
                                     message: result.output || result.error,
                                     step: `${subDeployment.name}/${step.name}`
-                                });
+                                })}\n\n`);
                                 
                                 if (!result.success && !step.continueOnError) {
                                     deploymentSuccess = false;
@@ -640,10 +638,10 @@ export function createAPIServer(port = 3000) {
                 }
                 
                 // Send completion
-                sendMessage({ 
+                res.write(`data: ${JSON.stringify({ 
                     type: 'complete', 
                     message: `Successfully deployed ${deploymentTargets.length} sub-project(s)!` 
-                });
+                })}\n\n`);
                 
                 // Record main monorepo deployment
                 const duration = Date.now() - startTime;
@@ -653,17 +651,17 @@ export function createAPIServer(port = 3000) {
                     subDeployments: deploymentTargets.map(name => ({ name, success: true }))
                 });
                 
-                // Mark deployment as complete
-                deploymentManager.completeDeployment(projectName, deploymentSuccess);
+                // Send a final close event
+                res.write(`event: close\ndata: {}\n\n`);
                 
             } else {
                 // Standard project deployment (original logic)
                 // Execute local steps first
                 if (project.localSteps && project.localSteps.length > 0) {
-                sendMessage({ 
+                res.write(`data: ${JSON.stringify({ 
                     type: 'progress', 
                     message: 'Executing local steps...' 
-                });
+                })}\n\n`);
                 
                 const { exec } = await import('child_process');
                 const { promisify } = await import('util');
@@ -673,10 +671,10 @@ export function createAPIServer(port = 3000) {
                     const stepStartTime = Date.now();
                     let workingDir = '';
                     
-                    sendMessage({ 
+                    res.write(`data: ${JSON.stringify({ 
                         type: 'step', 
                         message: `[Local] Running: ${step.name}` 
-                    });
+                    })}\n\n`);
                     
                     try {
                         // Trim whitespace from paths and ensure absolute path
@@ -729,11 +727,11 @@ export function createAPIServer(port = 3000) {
                             duration: Date.now() - stepStartTime
                         });
                         
-                        sendMessage({ 
+                        res.write(`data: ${JSON.stringify({ 
                             type: 'step-complete', 
                             message: output,
                             step: step.name
-                        });
+                        })}\n\n`);
                     } catch (error) {
                         // Check if this is a Git "nothing to commit" scenario
                         const isGitCommand = step.command.toLowerCase().includes('git commit');
@@ -754,11 +752,11 @@ export function createAPIServer(port = 3000) {
                                 duration: Date.now() - stepStartTime
                             });
                             
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: 'step-complete', 
                                 message: message,
                                 step: step.name
-                            });
+                            })}\n\n`);
                         } else {
                             // Build detailed error message for actual errors
                             let errorDetails = error.message;
@@ -789,11 +787,11 @@ export function createAPIServer(port = 3000) {
                                 duration: Date.now() - stepStartTime
                             });
                             
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: 'step-error', 
                                 message: errorDetails,
                                 step: step.name
-                            });
+                            })}\n\n`);
                             
                             if (!step.continueOnError) {
                                 deploymentSuccess = false;
@@ -809,17 +807,17 @@ export function createAPIServer(port = 3000) {
             const isGitRepo = await gitOps.isGitRepo();
             
             if (isGitRepo) {
-                sendMessage({ 
+                res.write(`data: ${JSON.stringify({ 
                     type: 'progress', 
                     message: 'Committing and pushing local changes...' 
-                });
+                })}\n\n`);
                 
                 const gitResult = await gitOps.commitAndPush(`Auto-deploy: ${new Date().toISOString()}`);
                 
-                sendMessage({ 
+                res.write(`data: ${JSON.stringify({ 
                     type: gitResult.success ? 'progress' : 'error', 
                     message: gitResult.message 
-                });
+                })}\n\n`);
             }
 
             // Run deployment steps
@@ -836,35 +834,34 @@ export function createAPIServer(port = 3000) {
                     statefulExecutor.setSessionId(sessionId);
                     currentExecutor = statefulExecutor;
                     activeExecutors.push(statefulExecutor);
-                    deploymentManager.setExecutor(projectName, statefulExecutor);
                     
-                    sendMessage({ 
+                    res.write(`data: ${JSON.stringify({ 
                         type: 'info', 
                         message: 'Using stateful SSH session for all steps' 
-                    });
+                    })}\n\n`);
                     
                     // Listen for real-time output
                     statefulExecutor.on('output', (data) => {
                         const lines = data.data.split('\n');
                         lines.forEach(line => {
                             if (line.trim()) {
-                                sendMessage({ 
+                                res.write(`data: ${JSON.stringify({ 
                                     type: 'output', 
                                     data: line + '\n',
                                     outputType: data.type || 'stdout'
-                                });
+                                })}\n\n`);
                             }
                         });
                     });
                     
                     // Listen for prompts
                     statefulExecutor.on('prompt', (promptData) => {
-                        sendMessage({ 
+                        res.write(`data: ${JSON.stringify({ 
                             type: 'prompt', 
                             sessionId: promptData.sessionId,
                             step: promptData.step,
                             prompt: promptData.prompt
-                        });
+                        })}\n\n`);
                         
                         // Store executor in global sessions for input handling
                         if (!global.deploymentSessions) {
@@ -907,11 +904,11 @@ export function createAPIServer(port = 3000) {
                                 duration: result.duration || Math.floor((Date.now() - startTime) / results.length)
                             });
                             
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: result.success ? 'step-complete' : 'step-error', 
                                 message: result.output || result.error,
                                 step: step.name
-                            });
+                            })}\n\n`);
                             
                             if (!result.success && !step.continueOnError) {
                                 deploymentSuccess = false;
@@ -930,35 +927,34 @@ export function createAPIServer(port = 3000) {
                     const executor = new InteractivePipelineExecutor(project.ssh, project.remotePath);
                     currentExecutor = executor;
                     activeExecutors.push(executor);
-                    deploymentManager.setExecutor(projectName, executor);
                     
                     // Execute steps with progress updates
                     for (const step of project.deploymentSteps) {
                         const stepStartTime = Date.now();
                         
-                        sendMessage({ 
+                        res.write(`data: ${JSON.stringify({ 
                             type: 'step', 
                             message: `Running: ${step.name}` 
-                        });
+                        })}\n\n`);
                         
                         // Set up interactive handling
                         executor.on('output', (data) => {
                             // Stream output in real-time
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: 'output', 
                                 data: data.data,
                                 outputType: data.type 
-                            });
+                            })}\n\n`);
                         });
                         
                         executor.on('prompt', (promptData) => {
                             // Send prompt to client
-                            sendMessage({ 
+                            res.write(`data: ${JSON.stringify({ 
                                 type: 'prompt', 
                                 sessionId: sessionId,
                                 step: promptData.step,
                                 prompt: promptData.prompt
-                            });
+                            })}\n\n`);
                         });
                         
                         // Create promise for handling prompts
@@ -992,11 +988,11 @@ export function createAPIServer(port = 3000) {
                             duration: Date.now() - stepStartTime
                         });
                         
-                        sendMessage({ 
+                        res.write(`data: ${JSON.stringify({ 
                             type: result.success ? 'step-complete' : 'step-error', 
                             message: result.output || result.error,
                             step: step.name
-                        });
+                        })}\n\n`);
                         
                         if (!result.success && !step.continueOnError) {
                             deploymentSuccess = false;
@@ -1007,10 +1003,10 @@ export function createAPIServer(port = 3000) {
             }
 
             // Send completion event
-            sendMessage({ 
+            res.write(`data: ${JSON.stringify({ 
                 type: 'complete', 
                 message: 'Deployment completed successfully!' 
-            });
+            })}\n\n`);
             
             // Record successful deployment
             const duration = Date.now() - startTime;
@@ -1019,16 +1015,16 @@ export function createAPIServer(port = 3000) {
                 steps: deploymentSteps
             });
             
-            // Mark deployment as complete
-            deploymentManager.completeDeployment(projectName, deploymentSuccess);
+            // Send a final close event
+            res.write(`event: close\ndata: {}\n\n`);
             } // End of standard deployment
         } catch (error) {
             deploymentSuccess = false;
             
-            sendMessage({ 
+            res.write(`data: ${JSON.stringify({ 
                 type: 'error', 
                 message: error.message 
-            });
+            })}\n\n`);
             
             // Record failed deployment
             const duration = Date.now() - startTime;
@@ -1038,8 +1034,8 @@ export function createAPIServer(port = 3000) {
                 error: error.message
             });
             
-            // Mark deployment as complete
-            deploymentManager.completeDeployment(projectName, false);
+            // Send a final close event
+            res.write(`event: close\ndata: {}\n\n`);
         } finally {
             // Close the connection
             setTimeout(() => {

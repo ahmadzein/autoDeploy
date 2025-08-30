@@ -24,6 +24,9 @@ AutoDeploy is a secure local deployment automation tool that helps deploy projec
 13. **Inline Step Editing**: Edit deployment steps directly in the UI without JSON mode
 14. **Monorepo Settings Editing**: Edit monorepo project settings through EditProject component
 15. **Display Name Consistency**: Show user-friendly display names instead of slugs everywhere
+16. **Prefilled Inputs for Interactive Steps**: Configure automatic responses for prompts
+17. **Unified StepEditor Component**: Consistent step editing UI across all project types
+18. **CLI Interactive Input Support**: Configure prefilled inputs via CLI edit command
 
 ### Configuration Structure Refactor
 
@@ -98,30 +101,27 @@ node src/config/migrate.js
 - In CLI: The terminal will pause for user input
 - Works with nested SSH sessions (jump servers)
 
-#### Prefilled Inputs for Interactive Steps:
+#### Prefilled Inputs (New Feature):
+- Configure automatic responses for interactive steps
+- Structure:
 ```json
 {
-  "name": "Run Deployment Script",
-  "command": "bash deploy.sh",
-  "workingDir": ".",
-  "continueOnError": false,
+  "name": "Deploy with Branch",
+  "command": "./deploy.sh",
   "interactive": true,
   "inputs": [
-    {
-      "name": "branch",
-      "value": "main"
-    },
-    {
-      "name": "ticket",
-      "value": "JIRA-123"
-    },
-    {
-      "name": "press_enter",
-      "value": ""  // Empty value for "Press enter" prompts
-    }
+    { "name": "branch", "value": "main" },
+    { "name": "environment", "value": "production" },
+    { "name": "confirm", "value": "" }  // Empty value = press enter
   ]
 }
 ```
+- Inputs are matched to prompts in order
+- Leave value empty for "Press enter" prompts
+- If no prefilled input matches, user is prompted
+- Configurable via:
+  - GUI: StepEditor component with interactive UI
+  - CLI: `autodeploy edit` command with prompts
 
 - **Prefilled inputs**: Automatically answer prompts in order
 - **Dynamic prompts**: If no prefilled input exists, GUI shows prompt

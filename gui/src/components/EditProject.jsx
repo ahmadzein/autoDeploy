@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Code, Edit2, X, Check } from 'lucide-react';
 import { projectAPI } from '../utils/api';
 import Breadcrumb from './Breadcrumb';
+import StepEditor from './StepEditor';
 
 function EditProject() {
   const { projectName } = useParams();
@@ -26,26 +27,10 @@ function EditProject() {
     deploymentSteps: []
   });
 
-  const [newStep, setNewStep] = useState({
-    name: '',
-    command: '',
-    workingDir: '.',
-    continueOnError: false
-  });
-
-  const [newLocalStep, setNewLocalStep] = useState({
-    name: '',
-    command: '',
-    workingDir: '.',
-    continueOnError: false
-  });
-
   const [activeTab, setActiveTab] = useState('remote');
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonContent, setJsonContent] = useState('');
   const [jsonEditMode, setJsonEditMode] = useState('full'); // 'full', 'config', 'local-steps', 'remote-steps'
-  const [editingStepIndex, setEditingStepIndex] = useState(null);
-  const [editingStepType, setEditingStepType] = useState(null); // 'local' or 'remote'
 
   useEffect(() => {
     fetchProject();
@@ -87,114 +72,6 @@ function EditProject() {
     }
   };
 
-  const handleStepChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setNewStep(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const handleLocalStepChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setNewLocalStep(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const addStep = () => {
-    if (newStep.name && newStep.command) {
-      setFormData(prev => ({
-        ...prev,
-        deploymentSteps: [...prev.deploymentSteps, { ...newStep }]
-      }));
-      setNewStep({
-        name: '',
-        command: '',
-        workingDir: '.',
-        continueOnError: false
-      });
-    }
-  };
-
-  const addLocalStep = () => {
-    if (newLocalStep.name && newLocalStep.command) {
-      setFormData(prev => ({
-        ...prev,
-        localSteps: [...prev.localSteps, { ...newLocalStep }]
-      }));
-      setNewLocalStep({
-        name: '',
-        command: '',
-        workingDir: '.',
-        continueOnError: false
-      });
-    }
-  };
-
-  const updateStep = (index, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      deploymentSteps: prev.deploymentSteps.map((step, i) => 
-        i === index ? { ...step, [field]: value } : step
-      )
-    }));
-  };
-
-  const updateLocalStep = (index, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      localSteps: prev.localSteps.map((step, i) => 
-        i === index ? { ...step, [field]: value } : step
-      )
-    }));
-  };
-
-  const removeStep = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      deploymentSteps: prev.deploymentSteps.filter((_, i) => i !== index)
-    }));
-  };
-
-  const removeLocalStep = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      localSteps: prev.localSteps.filter((_, i) => i !== index)
-    }));
-  };
-
-  const moveStep = (index, direction) => {
-    const steps = [...formData.deploymentSteps];
-    const newIndex = index + direction;
-    
-    if (newIndex >= 0 && newIndex < steps.length) {
-      [steps[index], steps[newIndex]] = [steps[newIndex], steps[index]];
-      setFormData(prev => ({ ...prev, deploymentSteps: steps }));
-    }
-  };
-
-  const moveLocalStep = (index, direction) => {
-    const steps = [...formData.localSteps];
-    const newIndex = index + direction;
-    
-    if (newIndex >= 0 && newIndex < steps.length) {
-      [steps[index], steps[newIndex]] = [steps[newIndex], steps[index]];
-      setFormData(prev => ({ ...prev, localSteps: steps }));
-    }
-  };
-
-  // Edit step functions
-  const startEditingStep = (index, type) => {
-    setEditingStepIndex(index);
-    setEditingStepType(type);
-  };
-
-  const cancelEditingStep = () => {
-    setEditingStepIndex(null);
-    setEditingStepType(null);
-  };
 
   const handleJsonChange = (e) => {
     setJsonContent(e.target.value);
@@ -669,132 +546,12 @@ function EditProject() {
                 Local steps run on your machine before the deployment.
               </p>
               
-              {/* Existing Local Steps */}
-              {formData.localSteps && formData.localSteps.length > 0 && (
-                <div className="space-y-3 mb-6">
-                  {formData.localSteps.map((step, index) => (
-                    <div key={index} className="flex items-center p-3 bg-gray-50 rounded-md">
-                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          value={step.name}
-                          onChange={(e) => updateLocalStep(index, 'name', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          placeholder="Step name"
-                        />
-                        <input
-                          type="text"
-                          value={step.command}
-                          onChange={(e) => updateLocalStep(index, 'command', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
-                          placeholder="Command"
-                        />
-                        <input
-                          type="text"
-                          value={step.workingDir || '.'}
-                          onChange={(e) => updateLocalStep(index, 'workingDir', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          placeholder="Working directory"
-                        />
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={step.continueOnError || false}
-                            onChange={(e) => updateLocalStep(index, 'continueOnError', e.target.checked)}
-                            className="mr-2"
-                          />
-                          <span className="text-sm">Continue on error</span>
-                        </label>
-                      </div>
-                      <div className="flex items-center ml-4 space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => moveLocalStep(index, -1)}
-                          disabled={index === 0}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                          title="Move up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveLocalStep(index, 1)}
-                          disabled={index === formData.localSteps.length - 1}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                          title="Move down"
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeLocalStep(index)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add New Local Step */}
-              <div className="space-y-4 border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700">Add New Local Step</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <input
-                      type="text"
-                      name="name"
-                      value={newLocalStep.name}
-                      onChange={handleLocalStepChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Step name"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      name="workingDir"
-                      value={newLocalStep.workingDir}
-                      onChange={handleLocalStepChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Working directory"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    name="command"
-                    value={newLocalStep.command}
-                    onChange={handleLocalStepChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono"
-                    placeholder="Command to run locally"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="continueOnError"
-                      checked={newLocalStep.continueOnError}
-                      onChange={handleLocalStepChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-700">Continue on error</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addLocalStep}
-                    disabled={!newLocalStep.name || !newLocalStep.command}
-                    className="inline-flex items-center px-3 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Local Step
-                  </button>
-                </div>
-              </div>
+              <StepEditor
+                steps={formData.localSteps || []}
+                onStepsChange={(steps) => setFormData(prev => ({ ...prev, localSteps: steps }))}
+                stepType="local"
+                projectPath={formData.localPath}
+              />
             </>
           )}
 
@@ -805,132 +562,12 @@ function EditProject() {
                 Remote steps run on the deployment server after connecting via SSH.
               </p>
               
-              {/* Existing Remote Steps */}
-              {formData.deploymentSteps.length > 0 && (
-                <div className="space-y-3 mb-6">
-                  {formData.deploymentSteps.map((step, index) => (
-                    <div key={index} className="flex items-center p-3 bg-gray-50 rounded-md">
-                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          value={step.name}
-                          onChange={(e) => updateStep(index, 'name', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          placeholder="Step name"
-                        />
-                        <input
-                          type="text"
-                          value={step.command}
-                          onChange={(e) => updateStep(index, 'command', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
-                          placeholder="Command"
-                        />
-                        <input
-                          type="text"
-                          value={step.workingDir || '.'}
-                          onChange={(e) => updateStep(index, 'workingDir', e.target.value)}
-                          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          placeholder="Working directory"
-                        />
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={step.continueOnError || false}
-                            onChange={(e) => updateStep(index, 'continueOnError', e.target.checked)}
-                            className="mr-2"
-                          />
-                          <span className="text-sm">Continue on error</span>
-                        </label>
-                      </div>
-                      <div className="flex items-center ml-4 space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => moveStep(index, -1)}
-                          disabled={index === 0}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                          title="Move up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveStep(index, 1)}
-                          disabled={index === formData.deploymentSteps.length - 1}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                          title="Move down"
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeStep(index)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add New Remote Step */}
-              <div className="space-y-4 border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700">Add New Remote Step</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <input
-                      type="text"
-                      name="name"
-                      value={newStep.name}
-                      onChange={handleStepChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Step name"
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      name="workingDir"
-                      value={newStep.workingDir}
-                      onChange={handleStepChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Working directory"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    name="command"
-                    value={newStep.command}
-                    onChange={handleStepChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono"
-                    placeholder="Command to run on server"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="continueOnError"
-                      checked={newStep.continueOnError}
-                      onChange={handleStepChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-700">Continue on error</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addStep}
-                    disabled={!newStep.name || !newStep.command}
-                    className="inline-flex items-center px-3 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Remote Step
-                  </button>
-                </div>
-              </div>
+              <StepEditor
+                steps={formData.deploymentSteps || []}
+                onStepsChange={(steps) => setFormData(prev => ({ ...prev, deploymentSteps: steps }))}
+                stepType="remote"
+                projectPath={formData.remotePath}
+              />
             </>
           )}
         </div>

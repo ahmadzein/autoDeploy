@@ -267,20 +267,40 @@ function DeploymentView() {
     });
   };
 
-  const stopDeployment = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+  const stopDeployment = async () => {
+    try {
+      // Call stop API endpoint
+      const response = await fetch(`http://localhost:${window.API_PORT || 3000}/api/deployments/${encodeURIComponent(projectName)}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to stop deployment');
+      }
+      
+      // Close event source if exists
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      
+      setDeploying(false);
+      setDeploymentStatus('idle');
+      setElapsedTime(0);
+      addLog('Deployment stopped by user', 'warning');
+      setPromptData(null);
+      
+      // Refresh history to show the stopped deployment
+      setTimeout(() => {
+        fetchDeploymentHistory();
+      }, 500);
+    } catch (err) {
+      console.error('Error stopping deployment:', err);
+      addLog('Error stopping deployment: ' + err.message, 'error');
     }
-    setDeploying(false);
-    setDeploymentStatus('idle');
-    setElapsedTime(0);
-    addLog('Deployment stopped by user', 'warning');
-    setPromptData(null);
-    // Refresh history to show the stopped deployment
-    setTimeout(() => {
-      fetchDeploymentHistory();
-    }, 500);
   };
 
   const handlePromptSubmit = async (e) => {

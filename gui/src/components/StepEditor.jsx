@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ChevronUp, ChevronDown, Edit2, Save, X, Settings } from 'lucide-react';
+import { Plus, Trash2, ChevronUp, ChevronDown, Edit2, Save, X } from 'lucide-react';
 
 function StepEditor({ 
   steps = [], 
@@ -8,8 +8,6 @@ function StepEditor({
   projectPath = '.'
 }) {
   const [editingIndex, setEditingIndex] = useState(null);
-  const [editingInputs, setEditingInputs] = useState(false);
-  const [editingInputsIndex, setEditingInputsIndex] = useState(null);
   const [newStep, setNewStep] = useState({
     name: '',
     command: '',
@@ -43,10 +41,6 @@ function StepEditor({
   const handleRemoveStep = (index) => {
     onStepsChange(steps.filter((_, i) => i !== index));
     if (editingIndex === index) setEditingIndex(null);
-    if (editingInputsIndex === index) {
-      setEditingInputsIndex(null);
-      setEditingInputs(false);
-    }
   };
 
   const handleMoveStep = (index, direction) => {
@@ -58,51 +52,12 @@ function StepEditor({
     }
   };
 
-  const handleAddInput = (stepIndex) => {
-    if (newInput.name) {
-      const updatedSteps = [...steps];
-      if (!updatedSteps[stepIndex].inputs) {
-        updatedSteps[stepIndex].inputs = [];
-      }
-      updatedSteps[stepIndex].inputs.push({ ...newInput });
-      onStepsChange(updatedSteps);
-      setNewInput({ name: '', value: '' });
-    }
-  };
-
-  const handleRemoveInput = (stepIndex, inputIndex) => {
-    const updatedSteps = [...steps];
-    updatedSteps[stepIndex].inputs = updatedSteps[stepIndex].inputs.filter((_, i) => i !== inputIndex);
-    onStepsChange(updatedSteps);
-  };
-
-  const handleUpdateInput = (stepIndex, inputIndex, field, value) => {
-    const updatedSteps = [...steps];
-    updatedSteps[stepIndex].inputs[inputIndex][field] = value;
-    onStepsChange(updatedSteps);
-  };
-
   const startEditing = (index) => {
     setEditingIndex(index);
-    setEditingInputs(false);
-    setEditingInputsIndex(null);
   };
 
   const cancelEditing = () => {
     setEditingIndex(null);
-  };
-
-  const startEditingInputs = (index) => {
-    setEditingInputsIndex(index);
-    setEditingInputs(true);
-    setEditingIndex(null);
-    setNewInput({ name: '', value: '' });
-  };
-
-  const cancelEditingInputs = () => {
-    setEditingInputsIndex(null);
-    setEditingInputs(false);
-    setNewInput({ name: '', value: '' });
   };
 
   return (
@@ -153,12 +108,80 @@ function StepEditor({
                       <input
                         type="checkbox"
                         checked={step.interactive || false}
-                        onChange={(e) => handleUpdateStep(index, 'interactive', e.target.checked)}
+                        onChange={(e) => {
+                          const isInteractive = e.target.checked;
+                          handleUpdateStep(index, 'interactive', isInteractive);
+                          if (!isInteractive) {
+                            handleUpdateStep(index, 'inputs', []);
+                          }
+                        }}
                         className="mr-2"
                       />
                       <span className="text-sm">Interactive (has prompts)</span>
                     </label>
                   </div>
+                  
+                  {/* Prefilled inputs management in edit mode */}
+                  {step.interactive && (
+                    <div className="p-3 bg-gray-100 rounded-md">
+                      <h5 className="text-sm font-medium text-gray-700 mb-2">Prefilled Inputs</h5>
+                      
+                      {/* Existing inputs */}
+                      {step.inputs && step.inputs.length > 0 && (
+                        <div className="space-y-2 mb-2">
+                          {step.inputs.map((input, inputIdx) => (
+                            <div key={inputIdx} className="flex items-center space-x-2">
+                              <input
+                                type="text"
+                                value={input.name}
+                                onChange={(e) => {
+                                  const updatedInputs = [...(step.inputs || [])];
+                                  updatedInputs[inputIdx].name = e.target.value;
+                                  handleUpdateStep(index, 'inputs', updatedInputs);
+                                }}
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                                placeholder="Input name"
+                              />
+                              <input
+                                type="text"
+                                value={input.value}
+                                onChange={(e) => {
+                                  const updatedInputs = [...(step.inputs || [])];
+                                  updatedInputs[inputIdx].value = e.target.value;
+                                  handleUpdateStep(index, 'inputs', updatedInputs);
+                                }}
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                                placeholder="Value (empty for 'press enter')"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedInputs = step.inputs.filter((_, i) => i !== inputIdx);
+                                  handleUpdateStep(index, 'inputs', updatedInputs);
+                                }}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Add new input */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentInputs = step.inputs || [];
+                          handleUpdateStep(index, 'inputs', [...currentInputs, { name: '', value: '' }]);
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        + Add Input
+                      </button>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-end space-x-2">
                     <button
                       type="button"
@@ -175,83 +198,6 @@ function StepEditor({
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                </div>
-              ) : editingInputs && editingInputsIndex === index ? (
-                /* Edit Inputs Mode */
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h5 className="text-sm font-medium text-gray-700">
-                      Prefilled Inputs for: {step.name}
-                    </h5>
-                    <button
-                      type="button"
-                      onClick={cancelEditingInputs}
-                      className="text-gray-600 hover:text-gray-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  
-                  {/* Existing Inputs */}
-                  {step.inputs && step.inputs.length > 0 && (
-                    <div className="space-y-2 mb-3">
-                      {step.inputs.map((input, inputIndex) => (
-                        <div key={inputIndex} className="flex items-center space-x-2 bg-white p-2 rounded border border-gray-200">
-                          <input
-                            type="text"
-                            value={input.name}
-                            onChange={(e) => handleUpdateInput(index, inputIndex, 'name', e.target.value)}
-                            className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                            placeholder="Input name"
-                          />
-                          <input
-                            type="text"
-                            value={input.value}
-                            onChange={(e) => handleUpdateInput(index, inputIndex, 'value', e.target.value)}
-                            className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                            placeholder="Value (empty for 'press enter')"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveInput(index, inputIndex)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Add New Input */}
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={newInput.name}
-                      onChange={(e) => setNewInput({ ...newInput, name: e.target.value })}
-                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                      placeholder="Input name (e.g., branch)"
-                    />
-                    <input
-                      type="text"
-                      value={newInput.value}
-                      onChange={(e) => setNewInput({ ...newInput, value: e.target.value })}
-                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                      placeholder="Value (leave empty for 'press enter')"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleAddInput(index)}
-                      disabled={!newInput.name}
-                      className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  
-                  <p className="text-xs text-gray-600 mt-2">
-                    Inputs will be used in order when prompts are detected. Leave value empty for "Press enter" prompts.
-                  </p>
                 </div>
               ) : (
                 /* View Mode */
@@ -298,16 +244,6 @@ function StepEditor({
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
-                      {step.interactive && (
-                        <button
-                          type="button"
-                          onClick={() => startEditingInputs(index)}
-                          className="text-green-600 hover:text-green-700"
-                          title="Manage inputs"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </button>
-                      )}
                       <button
                         type="button"
                         onClick={() => handleRemoveStep(index)}
@@ -374,7 +310,14 @@ function StepEditor({
                   type="checkbox"
                   name="interactive"
                   checked={newStep.interactive}
-                  onChange={(e) => setNewStep({ ...newStep, interactive: e.target.checked })}
+                  onChange={(e) => {
+                    const isInteractive = e.target.checked;
+                    setNewStep({ 
+                      ...newStep, 
+                      interactive: isInteractive,
+                      inputs: isInteractive ? (newStep.inputs || []) : []
+                    });
+                  }}
                   className="mr-2"
                 />
                 <span className="text-sm text-gray-700">Interactive (has prompts)</span>
@@ -390,6 +333,106 @@ function StepEditor({
               Add {stepType === 'local' ? 'Local' : 'Remote'} Step
             </button>
           </div>
+          
+          {/* Prefilled inputs for new interactive step */}
+          {newStep.interactive && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h5 className="text-sm font-medium text-gray-700 mb-3">Prefilled Inputs (Optional)</h5>
+              <p className="text-xs text-gray-600 mb-3">
+                Configure automatic responses for prompts. Leave value empty for "Press enter" prompts.
+              </p>
+              
+              {/* Existing inputs for new step */}
+              {newStep.inputs && newStep.inputs.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {newStep.inputs.map((input, idx) => (
+                    <div key={idx} className="flex items-center space-x-2 bg-white p-2 rounded border border-gray-200">
+                      <input
+                        type="text"
+                        value={input.name}
+                        onChange={(e) => {
+                          const updatedInputs = [...newStep.inputs];
+                          updatedInputs[idx].name = e.target.value;
+                          setNewStep({ ...newStep, inputs: updatedInputs });
+                        }}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="Input name"
+                      />
+                      <input
+                        type="text"
+                        value={input.value}
+                        onChange={(e) => {
+                          const updatedInputs = [...newStep.inputs];
+                          updatedInputs[idx].value = e.target.value;
+                          setNewStep({ ...newStep, inputs: updatedInputs });
+                        }}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="Value (empty for 'press enter')"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedInputs = newStep.inputs.filter((_, i) => i !== idx);
+                          setNewStep({ ...newStep, inputs: updatedInputs });
+                        }}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Add new input */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={newInput.name}
+                  onChange={(e) => setNewInput({ ...newInput, name: e.target.value })}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && newInput.name) {
+                      e.preventDefault();
+                      const currentInputs = newStep.inputs || [];
+                      setNewStep({ ...newStep, inputs: [...currentInputs, { ...newInput }] });
+                      setNewInput({ name: '', value: '' });
+                    }
+                  }}
+                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                  placeholder="Input name (e.g., branch)"
+                />
+                <input
+                  type="text"
+                  value={newInput.value}
+                  onChange={(e) => setNewInput({ ...newInput, value: e.target.value })}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && newInput.name) {
+                      e.preventDefault();
+                      const currentInputs = newStep.inputs || [];
+                      setNewStep({ ...newStep, inputs: [...currentInputs, { ...newInput }] });
+                      setNewInput({ name: '', value: '' });
+                    }
+                  }}
+                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                  placeholder="Value (leave empty for 'press enter')"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newInput.name) {
+                      const currentInputs = newStep.inputs || [];
+                      setNewStep({ ...newStep, inputs: [...currentInputs, { ...newInput }] });
+                      setNewInput({ name: '', value: '' });
+                    }
+                  }}
+                  disabled={!newInput.name}
+                  className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

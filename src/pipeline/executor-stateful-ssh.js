@@ -14,6 +14,7 @@ export class StatefulSSHExecutor extends EventEmitter {
         this.sshConfig = sshConfig;
         this.projectPath = projectPath;
         this.currentStream = null;
+        this.connection = null;
         this.commandQueue = [];
         this.currentCommandIndex = 0;
         this.sessionOutput = '';
@@ -33,6 +34,38 @@ export class StatefulSSHExecutor extends EventEmitter {
     }
     
     /**
+     * Clean up and close any active connections
+     */
+    cleanup() {
+        if (this.currentStream) {
+            try {
+                this.currentStream.close();
+                this.currentStream = null;
+            } catch (err) {
+                console.error('Error closing stream:', err);
+            }
+        }
+        
+        if (this.connection) {
+            try {
+                this.connection.disconnect();
+                this.connection = null;
+            } catch (err) {
+                console.error('Error disconnecting:', err);
+            }
+        }
+        
+        // Clear any pending callbacks
+        this.waitingForUserInput = false;
+        this.userInputCallback = null;
+        
+        // Remove from global sessions
+        if (this.sessionId && global.deploymentSessions) {
+            global.deploymentSessions.delete(this.sessionId);
+        }
+    }
+    
+    /**
      * Handle user input for prompts
      */
     handleUserInput(input) {
@@ -49,7 +82,7 @@ export class StatefulSSHExecutor extends EventEmitter {
      * Execute all steps in a single stateful SSH session
      */
     async executeSteps(steps) {
-        const connection = new SSHConnection(this.sshConfig);
+        this.connection = new SSHConnection(this.sshConfig);
         this.commandQueue = steps;
         this.currentCommandIndex = 0;
         
@@ -57,10 +90,10 @@ export class StatefulSSHExecutor extends EventEmitter {
             const results = [];
             let sessionActive = true;
             
-            connection.conn.on('ready', () => {
+            this.connection.conn.on('ready', () => {
                 console.log(chalk.blue('[STATEFUL-SSH] Connection established'));
                 
-                connection.conn.shell({ pty: true }, (err, stream) => {
+                this.connection.conn.shell({ pty: true }, (err, stream) => {
                     if (err) {
                         console.error(chalk.red('[STATEFUL-SSH] Failed to start shell:', err.message));
                         return reject(err);
@@ -101,7 +134,7 @@ export class StatefulSSHExecutor extends EventEmitter {
                     stream.on('close', () => {
                         clearInterval(timeoutCheck);
                         console.log(chalk.yellow('[STATEFUL-SSH] Shell session closed'));
-                        connection.disconnect();
+                        this.connection.disconnect();
                         
                         // Add any remaining results
                         while (results.length < steps.length) {
@@ -303,7 +336,7 @@ export class StatefulSSHExecutor extends EventEmitter {
                 });
             });
             
-            connection.conn.on('error', (err) => {
+            this.connection.conn.on('error', (err) => {
                 console.error(chalk.red('[STATEFUL-SSH] Connection error:', err.message));
                 reject(err);
             });
@@ -327,7 +360,7 @@ export class StatefulSSHExecutor extends EventEmitter {
                 }
             }
             
-            connection.conn.connect(connectionConfig);
+            this.connection.conn.connect(connectionConfig);
         });
     }
     

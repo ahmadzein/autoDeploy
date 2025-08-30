@@ -98,6 +98,9 @@ export async function handleEditCommand(projectName, options, { chalk, inquirer,
     } else {
         project.localSteps.forEach((step, index) => {
             console.log(`  ${index + 1}. ${step.name}: ${step.command}`);
+            if (step.interactive) {
+                console.log(chalk.cyan(`      [Interactive]${step.inputs?.length ? ` with ${step.inputs.length} prefilled input(s)` : ''}`));
+            }
         });
     }
     
@@ -107,6 +110,9 @@ export async function handleEditCommand(projectName, options, { chalk, inquirer,
     } else {
         project.deploymentSteps.forEach((step, index) => {
             console.log(`  ${index + 1}. ${step.name}: ${step.command}`);
+            if (step.interactive) {
+                console.log(chalk.cyan(`      [Interactive]${step.inputs?.length ? ` with ${step.inputs.length} prefilled input(s)` : ''}`));
+            }
         });
     }
 
@@ -317,8 +323,88 @@ export async function handleEditCommand(projectName, options, { chalk, inquirer,
                 name: 'continueOnError',
                 message: 'Continue on error?',
                 default: currentStep.continueOnError || false
+            },
+            {
+                type: 'confirm',
+                name: 'interactive',
+                message: 'Is this an interactive command (has prompts)?',
+                default: currentStep.interactive || false
             }
         ]);
+
+        // If interactive, handle prefilled inputs
+        if (modifiedStep.interactive) {
+            modifiedStep.inputs = currentStep.inputs || [];
+            
+            const { manageInputs } = await inquirer.prompt([
+                {
+                    type: 'confirm',
+                    name: 'manageInputs',
+                    message: `Manage prefilled inputs? (Currently ${modifiedStep.inputs.length} input(s))`,
+                    default: true
+                }
+            ]);
+            
+            if (manageInputs) {
+                console.log(chalk.yellow('\nCurrent inputs:'));
+                if (modifiedStep.inputs.length === 0) {
+                    console.log(chalk.gray('  No inputs configured'));
+                } else {
+                    modifiedStep.inputs.forEach((input, idx) => {
+                        console.log(`  ${idx + 1}. ${input.name}: "${input.value || '(press enter)'}"`);
+                    });
+                }
+                
+                const { inputAction } = await inquirer.prompt([
+                    {
+                        type: 'list',
+                        name: 'inputAction',
+                        message: 'What would you like to do?',
+                        choices: [
+                            { name: 'Add new inputs', value: 'add' },
+                            { name: 'Clear all inputs', value: 'clear' },
+                            { name: 'Keep existing inputs', value: 'keep' }
+                        ]
+                    }
+                ]);
+                
+                if (inputAction === 'clear') {
+                    modifiedStep.inputs = [];
+                } else if (inputAction === 'add') {
+                    let addMoreInputs = true;
+                    while (addMoreInputs) {
+                        const input = await inquirer.prompt([
+                            {
+                                type: 'input',
+                                name: 'name',
+                                message: 'Input name/prompt (e.g., "branch", "username"):',
+                                validate: input => input.length > 0 || 'Input name is required'
+                            },
+                            {
+                                type: 'input',
+                                name: 'value',
+                                message: 'Value to provide (leave empty for "press enter"):'
+                            }
+                        ]);
+                        
+                        modifiedStep.inputs.push(input);
+                        
+                        const { more } = await inquirer.prompt([
+                            {
+                                type: 'confirm',
+                                name: 'more',
+                                message: 'Add another prefilled input?',
+                                default: false
+                            }
+                        ]);
+                        addMoreInputs = more;
+                    }
+                }
+            }
+        } else {
+            // If not interactive, remove any existing inputs
+            delete modifiedStep.inputs;
+        }
 
         const steps = [...currentSteps];
         steps[stepIndex] = modifiedStep;
@@ -363,8 +449,51 @@ export async function handleEditCommand(projectName, options, { chalk, inquirer,
                 name: 'continueOnError',
                 message: 'Continue on error?',
                 default: false
+            },
+            {
+                type: 'confirm',
+                name: 'interactive',
+                message: 'Is this an interactive command (has prompts)?',
+                default: false
             }
         ]);
+
+        // If interactive, prompt for prefilled inputs
+        if (step.interactive) {
+            step.inputs = [];
+            
+            console.log(chalk.yellow('\nConfigure prefilled inputs for this interactive step:'));
+            console.log(chalk.gray('These will be automatically provided when prompts are detected.'));
+            
+            let addMoreInputs = true;
+            while (addMoreInputs) {
+                const input = await inquirer.prompt([
+                    {
+                        type: 'input',
+                        name: 'name',
+                        message: 'Input name/prompt (e.g., "branch", "username"):',
+                        validate: input => input.length > 0 || 'Input name is required'
+                    },
+                    {
+                        type: 'input',
+                        name: 'value',
+                        message: 'Value to provide (leave empty for "press enter"):'
+                    }
+                ]);
+                
+                step.inputs.push(input);
+                
+                const { more } = await inquirer.prompt([
+                    {
+                        type: 'confirm',
+                        name: 'more',
+                        message: 'Add another prefilled input?',
+                        default: false
+                    }
+                ]);
+                addMoreInputs = more;
+            }
+        }
 
         steps.push(step);
 
